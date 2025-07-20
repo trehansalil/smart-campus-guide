@@ -3,7 +3,7 @@ import os
 import pandas as pd
 import asyncio
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import AsyncGenerator, List, Dict, Optional
 
 from autogen_agentchat.agents import AssistantAgent
 from autogen_ext.models.openai import OpenAIChatCompletionClient
@@ -144,6 +144,7 @@ class CollegeRAGSystem:
         )
         # Run agent and collect streaming output
         stream = self.agent.run_stream(task=rag_task)
+        # AsyncGenerator[BaseAgentEvent | BaseChatMessage | TaskResult, None]
         response = ""
         async for chunk in stream:
             if hasattr(chunk, "content"):
