@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChromaDB Dashboard - Smart Campus Guide</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 30px;
+        }
+        .card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.3em;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.2s;
+            margin: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background: #2980b9;
+        }
+        .btn-success {
+            background: #27ae60;
+        }
+        .btn-success:hover {
+            background: #229954;
+        }
+        .btn-warning {
+            background: #f39c12;
+        }
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .api-response {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .endpoint {
+            background: #e3f2fd;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-family: monospace;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 ChromaDB Dashboard</h1>
+            <p>Smart Campus Guide - Vector Database Management</p>
+            <span id="status" class="status status-offline">Checking connection...</span>
+        </div>
+        
+        <div class="grid">
+            <!-- Status Card -->
+            <div class="card">
+                <h3>📊 Service Status</h3>
+                <div class="endpoint">GET /api/v1/heartbeat</div>
+                <button class="btn btn-success" onclick="checkHealth()">Check Health</button>
+                <button class="btn" onclick="getVersion()">Get Version</button>
+                <div id="health-response" class="api-response" style="display:none;"></div>
+            </div>
+
+            <!-- Collections Management -->
+            <div class="card">
+                <h3>📚 Collections</h3>
+                <div class="endpoint">GET /api/v1/collections</div>
+                <button class="btn" onclick="listCollections()">List Collections</button>
+                <button class="btn btn-warning" onclick="resetDatabase()">Reset DB</button>
+                <div id="collections-response" class="api-response" style="display:none;"></div>
+            </div>
+
+            <!-- API Documentation -->
+            <div class="card">
+                <h3>📖 API Documentation</h3>
+                <p>Interactive API documentation powered by Swagger UI</p>
+                <a href="http://localhost:8000/docs" class="btn" target="_blank">Open API Docs</a>
+                <a href="http://localhost:8000/openapi.json" class="btn" target="_blank">OpenAPI JSON</a>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <h3>⚡ Quick Actions</h3>
+                <p>Common ChromaDB operations for your Smart Campus Guide</p>
+                <button class="btn" onclick="createTestCollection()">Create Test Collection</button>
+                <button class="btn btn-warning" onclick="deleteTestCollection()">Delete Test Collection</button>
+                <div id="actions-response" class="api-response" style="display:none;"></div>
+            </div>
+
+            <!-- Connection Info -->
+            <div class="card">
+                <h3>🔗 Connection Information</h3>
+                <p><strong>Host:</strong> localhost:8000</p>
+                <p><strong>API Base:</strong> /api/v1</p>
+                <p><strong>Version:</strong> <span id="version">Loading...</span></p>
+                <p><strong>Persistent:</strong> Yes (Kubernetes PVC)</p>
+            </div>
+
+            <!-- Usage Examples -->
+            <div class="card">
+                <h3>💻 Python Usage Example</h3>
+                <div class="api-response">
+import chromadb<br>
+client = chromadb.HttpClient(host="localhost", port=8000)<br><br>
+# Create collection<br>
+collection = client.create_collection("smart_campus")<br><br>
+# Add documents<br>
+collection.add(<br>
+&nbsp;&nbsp;documents=["University info..."],<br>
+&nbsp;&nbsp;metadatas=[{"type": "college"}],<br>
+&nbsp;&nbsp;ids=["id1"]<br>
+)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';  // Use local proxy instead of direct ChromaDB URL
+        
+        async function makeRequest(endpoint, method = 'GET', data = null) {
+            try {
+                const options = {
+                    method,
+                    headers: {'Content-Type': 'application/json'},
+                    mode: 'cors'  // Enable CORS
+                };
+                if (data) options.body = JSON.stringify(data);
+                
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get('content-type');
+                let result;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    result = await response.json();
+                    result = JSON.stringify(result, null, 2);
+                } else {
+                    result = await response.text();
+                }
+                
+                return {
+                    status: response.status,
+                    data: result
+                };
+            } catch (error) {
+                console.error('API Request failed:', error);
+                
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    return {
+                        status: 0,
+                        data: `CORS Error: Cannot connect to ChromaDB. 
+                        
+Possible solutions:
+1. Make sure ChromaDB is running (port forwarding active)
+2. Use the dashboard server: python serve-dashboard.py
+3. Or access API docs directly: http://localhost:8000/docs
+
+Error: ${error.message}`
+                    };
+                }
+                
+                return {
+                    status: 0,
+                    data: `Error: ${error.message}`
+                };
+            }
+        }
+        
+        async function checkHealth() {
+            const result = await makeRequest('/heartbeat');
+            const responseDiv = document.getElementById('health-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = `Status: ${result.status}<br>Response: ${result.data}`;
+            
+            const statusEl = document.getElementById('status');
+            if (result.status === 200) {
+                statusEl.className = 'status status-online';
+                statusEl.textContent = 'Online';
+            } else {
+                statusEl.className = 'status status-offline';
+                statusEl.textContent = 'Offline';
+            }
+        }
+        
+        async function getVersion() {
+            const result = await makeRequest('/version');
+            document.getElementById('version').textContent = result.data.replace(/"/g, '');
+            const responseDiv = document.getElementById('health-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = `Version: ${result.data}`;
+        }
+        
+        async function listCollections() {
+            const result = await makeRequest('/collections');
+            const responseDiv = document.getElementById('collections-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = `Status: ${result.status}<br>Collections: ${result.data}`;
+        }
+        
+        async function createTestCollection() {
+            const data = {
+                name: "test_smart_campus",
+                metadata: {"description": "Test collection for Smart Campus Guide"}
+            };
+            const result = await makeRequest('/collections', 'POST', data);
+            const responseDiv = document.getElementById('actions-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = `Create Test Collection:<br>Status: ${result.status}<br>Response: ${result.data}`;
+        }
+        
+        async function deleteTestCollection() {
+            const result = await makeRequest('/collections/test_smart_campus', 'DELETE');
+            const responseDiv = document.getElementById('actions-response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = `Delete Test Collection:<br>Status: ${result.status}<br>Response: ${result.data}`;
+        }
+        
+        async function resetDatabase() {
+            if (confirm('Are you sure you want to reset the entire database? This will delete ALL collections and data!')) {
+                const result = await makeRequest('/reset', 'POST');
+                const responseDiv = document.getElementById('collections-response');
+                responseDiv.style.display = 'block';
+                responseDiv.innerHTML = `Reset Database:<br>Status: ${result.status}<br>Response: ${result.data}`;
+            }
+        }
+        
+        // Initialize
+        window.onload = function() {
+            checkHealth();
+            getVersion();
+        };
+    </script>
+</body>
+</html>

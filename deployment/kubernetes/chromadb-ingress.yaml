@@ -1,0 +1,31 @@
+# Optional: Ingress for external access (requires ingress controller)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chromadb-ingress
+  labels:
+    app: chromadb
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Add CORS headers for browser access
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+spec:
+  rules:
+  - host: chromadb.local  # Change to your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: chromadb
+            port:
+              number: 8000
+  # Uncomment for HTTPS
+  # tls:
+  # - hosts:
+  #   - chromadb.local
+  #   secretName: chromadb-tls

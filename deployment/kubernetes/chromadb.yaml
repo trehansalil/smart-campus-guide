@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chromadb-pvc
+  labels:
+    app: chromadb
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi  # Keeping existing storage size
+  storageClassName: hostpath  # Using your existing storage class
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chromadb-config
+data:
+  CHROMA_SERVER_HOST: "0.0.0.0"
+  CHROMA_SERVER_HTTP_PORT: "8000"
+  IS_PERSISTENT: "true"
+  ANONYMIZED_TELEMETRY: "false"
+  ALLOW_RESET: "true"  # Allow database reset via API (disable in production)
+  CHROMA_SERVER_AUTH_PROVIDER: ""  # Empty for no auth, set to "chromadb.auth.basic_authn.BasicAuthenticationServerProvider" for basic auth
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: chromadb
+  labels:
+    app: chromadb
+spec:
+  selector:
+    matchLabels:
+      app: chromadb
+  serviceName: chromadb
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: chromadb
+    spec:
+      containers:
+      - name: chromadb
+        image: ghcr.io/chroma-core/chroma:0.5.23  # Use specific version for stability
+        ports:
+          - name: http
+            containerPort: 8000
+            protocol: TCP
+        volumeMounts:
+          - name: chromadb-data
+            mountPath: /chroma/chroma
+        envFrom:
+          - configMapRef:
+              name: chromadb-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/heartbeat
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/v1/heartbeat
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /api/v1/heartbeat
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+      volumes:
+        - name: chromadb-data
+          persistentVolumeClaim:
+            claimName: chromadb-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chromadb
+  labels:
+    app: chromadb
+spec:
+  type: ClusterIP
+  selector:
+    app: chromadb
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chromadb-external
+  labels:
+    app: chromadb
+spec:
+  type: NodePort  # Use LoadBalancer if you have cloud provider support
+  selector:
+    app: chromadb
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      nodePort: 30800  # External access via cluster_ip:30800
+      protocol: TCP

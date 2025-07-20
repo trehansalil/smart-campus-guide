@@ -35,14 +35,36 @@ uv run main:app --reload
 ## 📦 Project Structure
 ```plaintext
 smart-campus-guide/
-├── main.py # FastAPI app
-├── rag_system.py # Core RAG logic
-├── cli.py # CLI interface
-├── colleges_dataset.csv # Data
-├── requirements.txt # Dependencies
-├── setup.py # Packaging
-├── README.md # This file
+├── main.py                 # FastAPI app (to be implemented)
+├── deployment/             # ChromaDB deployment files
+│   ├── kubernetes/         # Kubernetes manifests
+│   ├── scripts/           # Deployment scripts
+│   ├── dashboard/         # Web dashboard
+│   └── README.md          # Deployment guide
+├── chromadb.sh            # Master deployment script
+├── pyproject.toml         # Dependencies
+├── setup.py               # Packaging
+└── README.md              # This file
 ```
+
+## 🚀 ChromaDB Vector Database
+
+This project uses ChromaDB as the vector database for the RAG system. The database is deployed on Kubernetes with a web management interface.
+
+### Quick ChromaDB Setup
+
+```bash
+# Deploy ChromaDB to Kubernetes
+./chromadb.sh deploy
+
+# Start all services (port forwarding + dashboard)
+./chromadb.sh start
+
+# Access the dashboard
+open http://localhost:3001/chromadb-dashboard.html
+```
+
+For detailed ChromaDB deployment instructions, see [`deployment/README.md`](deployment/README.md).
 
 
 ## 📚 Example Query (API)
