@@ -28,8 +28,8 @@ async def index_colleges_to_memory(records, rag_memory: ChromaDBVectorMemory, ch
     Index colleges, avoiding duplicate entries by hash.
     """
     chunk_size = chunk_size or config.RAG_CHUNK_SIZE
-    
-    # Build a dict for quick hash existence (using existing memory)
+
+    # Build a set of existing hashes from current memory
     existing_hashes = set()
     rag_memory = ChromaDBVectorMemory(
             config=PersistentChromaDBVectorMemoryConfig(
@@ -45,27 +45,23 @@ async def index_colleges_to_memory(records, rag_memory: ChromaDBVectorMemory, ch
 
     # Query all current memory items (could limit by collection size for large sets)
     results = await rag_memory.query(
-        query="",  # Blank/query for scan
-        # n_results=10000,   # Very high! Ensures full crawl; adjust as needed
-        # include=["documents", "metadatas", "distances"],
-        # where=None         # No filter
+        query="",  # Blank query for full scan
     )
     if not results.results:
         print("No existing records found in ChromaDB, starting fresh indexing.")
     else:
         print(f"Found {len(results.results)} existing records in ChromaDB, checking for duplicates.")
-        # Build existing hashes from metadata
-        # (Assuming metadata contains 'row_hash' for uniqueness)
         for result in results.results:
-            if hasattr(result, 'metadata') and result.metadata and "row_hash" in result.metadata:
-                existing_hashes.add(result.metadata["row_hash"])
+            meta = getattr(result, "metadata", None)
+            if meta and "row_hash" in meta:
+                existing_hashes.add(meta["row_hash"])
 
     count_added = 0
     for idx, row in enumerate(records):
-        # Build canonical row string to hash (use all columns that together define uniqueness)
+        # Build canonical row string to hash (ensure all keys exist)
         desc = (
-            f"{row['name']}|{row['type']}|{row['city']}|{row['course']}|"
-            f"{row['fees']}|{row['avg_package']}|{row['ranking']}|{row['exam']}"
+            f"{row.get('name','')}|{row.get('type','')}|{row.get('city','')}|{row.get('course','')}|"
+            f"{row.get('fees','')}|{row.get('avg_package','')}|{row.get('ranking','')}|{row.get('exam','')}"
         )
         row_hash = hashlib.md5(desc.encode("utf-8")).hexdigest()
 
