@@ -4,13 +4,14 @@ Integration tests for RAG system functionality.
 """
 import sys
 import os
+import asyncio
 
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from rag_system import CollegeRAGSystem
+from simplified_rag import SimplifiedCollegeRAGSystem, extract_filters_with_llm
 from filter_models import CollegeFilters, NumericFilter, ComparisonOperator, QueryAnalysis
-from constants import config
+from src.constants import config
 
 class TestRAGSystemIntegration:
     """Integration tests for the complete RAG system."""
