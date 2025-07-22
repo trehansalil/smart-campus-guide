@@ -18,128 +18,131 @@ from autogen_ext.memory.chromadb import (
 from autogen_core.memory import MemoryContent, MemoryMimeType
 
 from constants import config
+from filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator, CollegeType
 
-# Helper: Parse query for metadata filters
-def parse_metadata_filters(query: str) -> tuple[str, Dict]:
+# Simple LLM-based filter extraction (without complex autogen agent setup)
+async def extract_filters_with_llm(query: str) -> QueryAnalysis:
     """
-    Parse query string to extract metadata filters and clean query.
-    
-    Supported filter patterns:
-    - fees < ₹10L, fees <= 10 lakhs, fees under 1000000
-    - type = private, type: government, type is govt
-    - city = mumbai, city: delhi, in bangalore
-    - ranking < 50, rank <= 20, ranking better than 30
-    - package > ₹5L, avg_package >= 500000
-    
-    Args:
-        query: Original query string
+    Extract structured filters from natural language using LLM.
+    This is a simplified version that works reliably.
+    """
+    try:
+        import openai
         
-    Returns:
-        tuple: (cleaned_query, filters_dict)
-    """
-    filters = {}
-    cleaned_query = query.lower()
-    
-    # Pattern for fees filters (supports ₹, lakhs, L notation)
-    fees_patterns = [
-        r'fees?\s*(?:under|<|<=|less than|below)\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?',
-        r'fees?\s*(?:above|>|>=|more than|over)\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?',
-        r'under\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?\s*fees?',
-        r'(?:under|below)\s*(\d+)\s*(?:l|lakh|lakhs?)',  # Handle "under 10 lakhs"
-    ]
-    
-    for pattern in fees_patterns:
-        match = re.search(pattern, cleaned_query, re.IGNORECASE)
-        if match:
-            amount = float(match.group(1))
-            # Convert lakhs to actual amount
-            if any(unit in match.group(0).lower() for unit in ['l', 'lakh']):
-                amount *= 100000
+        system_prompt = """You are an expert at extracting structured college search filters from natural language queries.
+
+Extract filter criteria and respond with valid JSON containing:
+- filters: Object with extracted filters
+- cleaned_query: String with filter terms removed
+- intent: String describing the primary intent
+- confidence: Float between 0.0-1.0
+
+Supported filters:
+- city: String (e.g., "Mumbai", "Delhi") - use title case
+- course: String (e.g., "MBA", "Engineering", "Medical") - use title case exactly as shown
+- fees: Object with {value: number, operator: "lt"/"gt"/"eq"} (convert lakhs to actual amounts)
+- avg_package: Object with {value: number, operator: "lt"/"gt"/"eq"}
+- ranking: Object with {value: number, operator: "lt"/"gt"/"eq"} (lower = better)
+- college_type: String ("private" or "govt") - use lowercase
+
+IMPORTANT: Use these exact values for consistency:
+- For college_type: "private" or "govt" (lowercase)
+- For course: "MBA", "Engineering", "Medical" (title case, not ALL CAPS)
+- For city: "Delhi", "Mumbai", "Bangalore" (title case)
+
+Example:
+Query: "MBA colleges in Delhi under 10 lakhs fees"
+Response: {"filters": {"city": "Delhi", "course": "MBA", "fees": {"value": 1000000, "operator": "lt"}}, "cleaned_query": "colleges", "intent": "find_colleges", "confidence": 0.9}
+
+Analyze this query:"""
+
+        client = openai.AsyncOpenAI(
+            api_key=config.OPENAI_RAG_MODEL_API_KEY,
+            base_url=config.OPENAI_RAG_MODEL_API_BASE
+        )
+        
+        response = await client.chat.completions.create(
+            model=config.OPENAI_RAG_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query}
+            ],
+            temperature=0.1,
+            max_tokens=500
+        )
+        
+        response_text = response.choices[0].message.content
+        
+        if not response_text:
+            raise ValueError("Empty response from LLM")
             
-            if any(op in match.group(0) for op in ['under', '<', 'less', 'below']):
-                filters['fees'] = {'$lt': int(amount)}
-            elif any(op in match.group(0) for op in ['above', '>', 'more', 'over']):
-                filters['fees'] = {'$gt': int(amount)}
-            
-            # Remove the filter pattern from query
-            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
-    
-    # Pattern for type filters
-    type_patterns = [
-        r'type\s*(?:=|:|\bis\b)\s*(private|government|govt|public)',
-        r'(private|government|govt|public)\s*(?:college|university|institute)',
-    ]
-    
-    for pattern in type_patterns:
-        match = re.search(pattern, cleaned_query, re.IGNORECASE)
-        if match:
-            college_type = match.group(1).lower()
-            # Normalize type values
-            if college_type in ['government', 'govt', 'public']:
-                filters['type'] = 'Govt'
-            elif college_type == 'private':
-                filters['type'] = 'Private'
-            
-            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
-    
-    # Pattern for city filters - improve to avoid false matches
-    city_patterns = [
-        r'city\s*(?:=|:|\bis\b)\s*(\w+)',
-        r'\bin\s+([A-Z][a-z]+)(?:\s+city)?',  # Match "in Mumbai", "in Delhi" with capital letters
-        r'([A-Z][a-z]+)\s+(?:colleges?|universities?)',  # Match "Mumbai colleges", "Delhi universities"
-    ]
-    
-    for pattern in city_patterns:
-        match = re.search(pattern, cleaned_query, re.IGNORECASE)
-        if match:
-            city = match.group(1).title()  # Capitalize city name
-            filters['city'] = city
-            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
-            break  # Only take the first city match
-    
-    # Pattern for ranking filters
-    ranking_patterns = [
-        r'rank(?:ing)?\s*(?:<|<=|less than|under|better than)\s*(\d+)',
-        r'rank(?:ing)?\s*(?:>|>=|more than|above|worse than)\s*(\d+)',
-        r'top\s*(\d+)\s*rank(?:ing|ed)?',
-    ]
-    
-    for pattern in ranking_patterns:
-        match = re.search(pattern, cleaned_query, re.IGNORECASE)
-        if match:
-            rank = int(match.group(1))
-            
-            if any(op in match.group(0) for op in ['<', 'less', 'under', 'better']):
-                filters['ranking'] = {'$lt': rank}
-            elif any(op in match.group(0) for op in ['>', 'more', 'above', 'worse']):
-                filters['ranking'] = {'$gt': rank}
-            elif 'top' in match.group(0):
-                filters['ranking'] = {'$lte': rank}
-            
-            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
-    
-    # Pattern for package filters
-    package_patterns = [
-        r'package\s*(?:>|>=|above|more than)\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?',
-        r'placement\s*(?:>|>=|above|more than)\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?',
-    ]
-    
-    for pattern in package_patterns:
-        match = re.search(pattern, cleaned_query, re.IGNORECASE)
-        if match:
-            amount = float(match.group(1))
-            # Convert lakhs to actual amount
-            if any(unit in match.group(0).lower() for unit in ['l', 'lakh']):
-                amount *= 100000
-                
-            filters['avg_package'] = {'$gt': int(amount)}
-            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
-    
-    # Clean up the query - remove extra spaces, common words
-    cleaned_query = re.sub(r'\s+', ' ', cleaned_query).strip()
-    cleaned_query = re.sub(r'\b(?:best|top|good|excellent)\b', '', cleaned_query, flags=re.IGNORECASE).strip()
-    
-    return cleaned_query, filters
+        # Parse JSON response
+        json_start = response_text.find('{')
+        json_end = response_text.rfind('}') + 1
+        
+        if json_start == -1 or json_end == 0:
+            raise ValueError("No JSON found in response")
+        
+        import json
+        json_str = response_text[json_start:json_end]
+        response_data = json.loads(json_str)
+        
+        # Convert to structured models
+        filters_data = response_data.get('filters', {})
+        
+        # Convert numeric filters
+        for field in ['fees', 'avg_package', 'ranking']:
+            if field in filters_data and isinstance(filters_data[field], dict):
+                numeric_data = filters_data[field]
+                filters_data[field] = NumericFilter(
+                    value=numeric_data['value'],
+                    operator=ComparisonOperator(numeric_data['operator'])
+                )
+        
+        # Ensure college_type is lowercase to match data
+        if 'college_type' in filters_data:
+            filters_data['college_type'] = filters_data['college_type'].lower()
+        
+        # Normalize course names to match data format
+        if 'course' in filters_data:
+            course = filters_data['course'].lower()
+            if course in ['engineering', 'engineer']:
+                filters_data['course'] = 'Engineering'
+            elif course == 'mba':
+                filters_data['course'] = 'MBA'
+            elif course in ['medicine', 'medical']:
+                filters_data['course'] = 'Medicine'
+            # Keep the original case for other courses
+        
+        filters = CollegeFilters(**filters_data)
+        
+        return QueryAnalysis(
+            original_query=query,
+            filters=filters,
+            cleaned_query=response_data.get('cleaned_query', query),
+            intent=response_data.get('intent', 'find_colleges'),
+            confidence=response_data.get('confidence', 0.7)
+        )
+        
+    except Exception as e:
+        print(f"⚠️  LLM filter extraction failed: {e}")
+        # Fallback to basic analysis
+        return QueryAnalysis(
+            original_query=query,
+            filters=CollegeFilters(
+                city=None,
+                state=None,
+                fees=None,
+                avg_package=None,
+                ranking=None,
+                course=None,
+                college_type=None,
+                exam=None
+            ),
+            cleaned_query=query,
+            intent="find_colleges",
+            confidence=0.1
+        )
 
 # Helper: Create ChromaDB memory configuration based on environment
 def create_chromadb_memory_config(k: Optional[int] = None, score_threshold: Optional[float] = None, use_deployment: Optional[bool] = True) -> ChromaDBVectorMemory:
@@ -321,131 +324,138 @@ class CollegeRAGSystem:
 
     # Async run: Given a user query, produce a RAG-based recommendation
     async def recommend(self, query: str) -> str:
+        """
+        Get college recommendations using enhanced LLM-powered metadata filtering and semantic search.
+        """
         if not self.agent:
             raise ValueError("RAG system not initialized. Call initialize() first.")
         
         if not self.rag_memory:
             raise ValueError("RAG memory not initialized. Call initialize() first.")
         
-        # Parse query for metadata filters
-        cleaned_query, metadata_filters = parse_metadata_filters(query)
-        
-        print(f"🔍 Original query: {query}")
-        if metadata_filters:
-            print(f"🎯 Extracted filters: {metadata_filters}")
-            print(f"🧹 Cleaned query: {cleaned_query}")
-        
-        # Create a temporary memory config with higher k and lower score threshold for better results
-        temp_memory = create_chromadb_memory_config(k=50, score_threshold=0.0)
-        
-        # Query the memory directly to get relevant colleges with metadata filters
         try:
+            # Extract structured filters using LLM
+            print(f"🔍 Analyzing query: {query}")
+            query_analysis = await extract_filters_with_llm(query)
+            
+            print(f"📊 Filter extraction confidence: {query_analysis.confidence:.1%}")
+            # Check if any filters were extracted
+            filters_dict = query_analysis.filters.to_chromadb_filters()
+            if filters_dict:
+                print(f"🎯 Extracted filters: {query_analysis.filters.to_readable_summary()}")
+            
+            # Convert to ChromaDB format
+            metadata_filters = query_analysis.filters.to_chromadb_filters()
+            cleaned_query = query_analysis.cleaned_query
+            
+            # For very low confidence, fall back to original query
+            if query_analysis.confidence < 0.3:
+                cleaned_query = query
+                metadata_filters = {}
+                print("⚠️  Low confidence, using original query without filters")
+            
+            print(f"🔍 Searching with: '{cleaned_query}'")
             if metadata_filters:
-                # Convert filters to ChromaDB format - use $and for multiple conditions
-                if len(metadata_filters) > 1:
-                    # Multiple filters need to be combined with $and
-                    chroma_filter = {"$and": []}
-                    for key, value in metadata_filters.items():
-                        if isinstance(value, dict):
-                            # Handle operators like $lt, $gt
-                            for op, val in value.items():
-                                chroma_filter["$and"].append({key: {op: val}})
-                        else:
-                            # Handle direct equality
-                            chroma_filter["$and"].append({key: value})
+                print(f"📋 Applying filters: {metadata_filters}")
+            
+            # Create a temporary memory config with higher k for better results
+            temp_memory = create_chromadb_memory_config(k=50, score_threshold=0.0)
+            
+            # Query the memory with filters
+            try:
+                if metadata_filters:
+                    # Convert filters to ChromaDB format with $and
+                    if len(metadata_filters) > 1:
+                        chroma_filter = {"$and": []}
+                        for key, value in metadata_filters.items():
+                            if isinstance(value, dict):
+                                # Handle operators like $lt, $gt
+                                for op, val in value.items():
+                                    chroma_filter["$and"].append({key: {op: val}})
+                            else:
+                                # Handle direct equality
+                                chroma_filter["$and"].append({key: value})
+                    else:
+                        # Single filter can be used directly
+                        chroma_filter = metadata_filters
+                    
+                    print(f"🔧 ChromaDB filter format: {chroma_filter}")
+                    
+                    results = await temp_memory.query(
+                        query=cleaned_query or "college university institute",
+                        where=chroma_filter
+                    )
                 else:
-                    # Single filter can be used directly
-                    chroma_filter = metadata_filters
-                
-                print(f"🔧 ChromaDB filter format: {chroma_filter}")
-                
-                results = await temp_memory.query(
-                    query=cleaned_query or "college university institute",
-                    where=chroma_filter
-                )
-            else:
-                # Standard query without filters
+                    results = await temp_memory.query(query=cleaned_query or query)
+                    
+            except Exception as e:
+                print(f"⚠️  Metadata filtering failed, falling back to standard query: {e}")
                 results = await temp_memory.query(query=query)
                 
+            await temp_memory.close()
+            
+            if not results.results:
+                if metadata_filters:
+                    return f"❌ No colleges found matching your criteria. Try adjusting your filters or search terms.\n\nApplied filters: {query_analysis.filters.to_readable_summary()}"
+                return "❌ No matching colleges found for your query."
+            
+            print(f"📊 Found {len(results.results)} results after filtering")
+            
+            # Format the top 3 unique results
+            formatted_results = []
+            seen_colleges = set()
+            max_results = 3
+            
+            # Sort results by score (higher is better)
+            sorted_results = sorted(results.results, 
+                                  key=lambda x: getattr(x.metadata, 'score', 0) if hasattr(x.metadata, 'score') else getattr(x, 'score', 0), 
+                                  reverse=True)
+            
+            for result in sorted_results:
+                if len(formatted_results) >= max_results:
+                    break
+                    
+                metadata = getattr(result, 'metadata', None)
+                if not metadata:
+                    continue
+                    
+                college_name = metadata.get('name', 'Unknown College') if hasattr(metadata, 'get') else getattr(metadata, 'name', 'Unknown College')
+                
+                # Skip duplicates
+                if college_name in seen_colleges:
+                    continue
+                seen_colleges.add(college_name)
+                
+                fees = metadata.get('fees', 0) if hasattr(metadata, 'get') else getattr(metadata, 'fees', 0)
+                avg_package = metadata.get('avg_package', 0) if hasattr(metadata, 'get') else getattr(metadata, 'avg_package', 0)
+                college_type = metadata.get('type', 'Unknown') if hasattr(metadata, 'get') else getattr(metadata, 'type', 'Unknown')
+                city = metadata.get('city', 'Unknown') if hasattr(metadata, 'get') else getattr(metadata, 'city', 'Unknown')
+                ranking = metadata.get('ranking', 'N/A') if hasattr(metadata, 'get') else getattr(metadata, 'ranking', 'N/A')
+                
+                # Format fees and package
+                fees_formatted = f"₹{fees:,}" if fees else "Not specified"
+                package_formatted = f"₹{avg_package:,}" if avg_package else "Not specified"
+                
+                formatted_results.append(
+                    f"- **{college_name}** ({city}): Fees - {fees_formatted}, Avg Package - {package_formatted}, Type - {college_type.capitalize()}, Ranking - {ranking}"
+                )
+            
+            if not formatted_results:
+                if metadata_filters:
+                    return f"❌ No colleges found matching your criteria. Try adjusting your filters.\n\nApplied filters: {query_analysis.filters.to_readable_summary()}"
+                return "❌ No matching colleges found for your query."
+            
+            # Add header with intelligent filter information
+            filter_info = ""
+            if metadata_filters and query_analysis.confidence > 0.5:
+                filter_info = f" (Filtered by: {query_analysis.filters.to_readable_summary()})"
+            
+            header = f"**Top {len(formatted_results)} College{'s' if len(formatted_results) != 1 else ''} matching your query{filter_info}:**\n\n"
+            return header + "\n".join(formatted_results)
+            
         except Exception as e:
-            print(f"⚠️  Metadata filtering failed, falling back to standard query: {e}")
-            # Fallback to standard query if metadata filtering fails
-            results = await temp_memory.query(query=query)
-            
-        await temp_memory.close()  # Clean up the temporary memory
-        
-        if not results.results:
-            if metadata_filters:
-                return f"No colleges found matching your criteria. Try adjusting your filters: {metadata_filters}"
-            return "No matching colleges found for your query."
-        
-        print(f"📊 Found {len(results.results)} results after filtering")
-        
-        # Format the top 3 unique results as a clean markdown list
-        formatted_results = []
-        seen_colleges = set()  # To avoid duplicates
-        max_results = 3
-        
-        # Sort results by score (higher is better for similarity)
-        sorted_results = sorted(results.results, 
-                              key=lambda x: getattr(x.metadata, 'score', 0) if hasattr(x.metadata, 'score') else getattr(x, 'score', 0), 
-                              reverse=True)
-        
-        # Iterate through all results to find top 3 unique colleges
-        for result in sorted_results:
-            if len(formatted_results) >= max_results:
-                break
-                
-            metadata = getattr(result, 'metadata', None)
-            if not metadata:
-                continue
-                
-            college_name = metadata.get('name', 'Unknown College') if hasattr(metadata, 'get') else getattr(metadata, 'name', 'Unknown College')
-            
-            # Skip duplicates
-            if college_name in seen_colleges:
-                continue
-            seen_colleges.add(college_name)
-            
-            fees = metadata.get('fees', 0) if hasattr(metadata, 'get') else getattr(metadata, 'fees', 0)
-            avg_package = metadata.get('avg_package', 0) if hasattr(metadata, 'get') else getattr(metadata, 'avg_package', 0)
-            college_type = metadata.get('type', 'Unknown') if hasattr(metadata, 'get') else getattr(metadata, 'type', 'Unknown')
-            city = metadata.get('city', 'Unknown') if hasattr(metadata, 'get') else getattr(metadata, 'city', 'Unknown')
-            ranking = metadata.get('ranking', 'N/A') if hasattr(metadata, 'get') else getattr(metadata, 'ranking', 'N/A')
-            
-            # Format fees and package in a readable way
-            fees_formatted = f"₹{fees:,}" if fees else "Not specified"
-            package_formatted = f"₹{avg_package:,}" if avg_package else "Not specified"
-            
-            # Enhanced formatting with more details
-            formatted_results.append(
-                f"- **{college_name}** ({city}): Fees - {fees_formatted}, Avg Package - {package_formatted}, Type - {college_type.capitalize()}, Ranking - {ranking}"
-            )
-        
-        if not formatted_results:
-            if metadata_filters:
-                return f"No colleges found matching your criteria. Applied filters: {metadata_filters}"
-            return "No matching colleges found for your query."
-        
-        # Add a header with filter information
-        filter_info = ""
-        if metadata_filters:
-            filter_parts = []
-            for key, value in metadata_filters.items():
-                if isinstance(value, dict):
-                    for op, val in value.items():
-                        op_text = {"$lt": "under", "$lte": "≤", "$gt": "above", "$gte": "≥"}.get(op, op)
-                        if key == 'fees' and val >= 100000:
-                            val_text = f"₹{val//100000}L"
-                        else:
-                            val_text = str(val)
-                        filter_parts.append(f"{key} {op_text} {val_text}")
-                else:
-                    filter_parts.append(f"{key}={value}")
-            filter_info = f" (Filtered by: {', '.join(filter_parts)})"
-        
-        header = f"**Top {len(formatted_results)} College{'s' if len(formatted_results) != 1 else ''} matching your query{filter_info}:**\n\n"
-        return header + "\n".join(formatted_results)
+            print(f"❌ Error in recommend: {e}")
+            return f"❌ Sorry, I encountered an error while processing your request: {str(e)}"
 
     # Clean up resources (recommended in long-running jobs)
     async def close(self):
