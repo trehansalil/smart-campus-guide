@@ -132,20 +132,77 @@ class CollegeRAGSystem:
     async def recommend(self, query: str) -> str:
         if not self.agent:
             raise ValueError("RAG system not initialized. Call initialize() first.")
-            
-        # Compose a recommendation prompt
-        rag_task = (
-            f"Based on the following query, recommend the top 3 matching Indian colleges from the memory store. "
-            f"Present the match as a markdown bullet list (college, fees, avg package, type). Query: {query}"
+        
+        if not self.rag_memory:
+            raise ValueError("RAG memory not initialized. Call initialize() first.")
+        
+        # Create a temporary memory config with higher k and lower score threshold for better results
+        temp_memory = ChromaDBVectorMemory(
+            config=PersistentChromaDBVectorMemoryConfig(
+                collection_name=config.CHROMA_COLLECTION_NAME,
+                persistence_path=config.CHROMA_PERSIST_DIRECTORY,
+                k=25,  # Get all results first
+                score_threshold=0.0,  # No score filtering, we'll rank by relevance
+                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
+                    model_name=config.EMBEDDING_MODEL_NAME
+                ),
+            )
         )
-        # Run agent and collect streaming output
-        stream = self.agent.run_stream(task=rag_task)
-        # AsyncGenerator[BaseAgentEvent | BaseChatMessage | TaskResult, None]
-        response = ""
-        async for chunk in stream:
-            if hasattr(chunk, "content"):
-                response += str(getattr(chunk, "content"))
-        return response.strip()
+        
+        # Query the memory directly to get relevant colleges
+        results = await temp_memory.query(query=query)
+        await temp_memory.close()  # Clean up the temporary memory
+        
+        if not results.results:
+            return "No matching colleges found for your query."
+        
+        # Format the top 3 unique results as a clean markdown list
+        formatted_results = []
+        seen_colleges = set()  # To avoid duplicates
+        max_results = 3
+        
+        # Sort results by score (higher is better for similarity)
+        sorted_results = sorted(results.results, 
+                              key=lambda x: getattr(x.metadata, 'score', 0) if hasattr(x.metadata, 'score') else getattr(x, 'score', 0), 
+                              reverse=True)
+        
+        # Iterate through all results to find top 3 unique colleges
+        for result in sorted_results:
+            if len(formatted_results) >= max_results:
+                break
+                
+            metadata = getattr(result, 'metadata', None)
+            if not metadata:
+                continue
+                
+            college_name = metadata.get('name', 'Unknown College') if hasattr(metadata, 'get') else getattr(metadata, 'name', 'Unknown College')
+            
+            # Skip duplicates
+            if college_name in seen_colleges:
+                continue
+            seen_colleges.add(college_name)
+            
+            fees = metadata.get('fees', 0) if hasattr(metadata, 'get') else getattr(metadata, 'fees', 0)
+            avg_package = metadata.get('avg_package', 0) if hasattr(metadata, 'get') else getattr(metadata, 'avg_package', 0)
+            college_type = metadata.get('type', 'Unknown') if hasattr(metadata, 'get') else getattr(metadata, 'type', 'Unknown')
+            city = metadata.get('city', 'Unknown') if hasattr(metadata, 'get') else getattr(metadata, 'city', 'Unknown')
+            ranking = metadata.get('ranking', 'N/A') if hasattr(metadata, 'get') else getattr(metadata, 'ranking', 'N/A')
+            
+            # Format fees and package in a readable way
+            fees_formatted = f"₹{fees:,}" if fees else "Not specified"
+            package_formatted = f"₹{avg_package:,}" if avg_package else "Not specified"
+            
+            # Enhanced formatting with more details
+            formatted_results.append(
+                f"- **{college_name}** ({city}): Fees - {fees_formatted}, Avg Package - {package_formatted}, Type - {college_type.capitalize()}, Ranking - {ranking}"
+            )
+        
+        if not formatted_results:
+            return "No matching colleges found for your query."
+        
+        # Add a header and return the formatted list
+        header = f"**Top {len(formatted_results)} College{'s' if len(formatted_results) != 1 else ''} matching your query:**\n\n"
+        return header + "\n".join(formatted_results)
 
     # Clean up resources (recommended in long-running jobs)
     async def close(self):
@@ -192,11 +249,23 @@ if __name__ == "__main__":
         
         rag = CollegeRAGSystem()
         await rag.initialize()
-        query = "Best private MBA colleges in Delhi under 10 lakhs fees"
-        print("Query:", query)
-        answer = await rag.recommend(query)
-        print("\nResult:\n", answer)
-        await rag.delete_all_chromadb_data()
+        
+        # Test multiple queries to show the improved functionality
+        test_queries = [
+            "Best private MBA colleges in Delhi under 10 lakhs fees",
+            "Top engineering colleges in Mumbai",
+            "Government colleges for MBA in India"
+        ]
+        
+        for query in test_queries:
+            print(f"\n{'='*50}")
+            print(f"Query: {query}")
+            print('='*50)
+            answer = await rag.recommend(query)
+            print(answer)
+        
+        # Only delete data if you want to reset (uncomment next line if needed)
+        # await rag.delete_all_chromadb_data()
         await rag.close()
     
     asyncio.run(_demo())
