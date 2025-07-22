@@ -16,9 +16,13 @@ from autogen_ext.memory.chromadb import (
     DefaultEmbeddingFunctionConfig,
 )
 from autogen_core.memory import MemoryContent, MemoryMimeType
+import sys
+import os
+# Add parent directory to path to import modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.constants import config
-from filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator
+from src.rag.filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator
 
 
 # Simple LLM-based filter extraction (without complex autogen agent setup)
@@ -158,6 +162,7 @@ def create_chromadb_memory_config(k: Optional[int] = None, score_threshold: Opti
     
     # Use local persistent storage (most reliable)
     print(f"💾 Using ChromaDB local persistence at {config.CHROMA_PERSIST_DIRECTORY}")
+    print(f"🔧 Using default embedding function for network compatibility")
     memory_config = PersistentChromaDBVectorMemoryConfig(
         collection_name=config.CHROMA_COLLECTION_NAME,
         persistence_path=config.CHROMA_PERSIST_DIRECTORY,
@@ -165,9 +170,7 @@ def create_chromadb_memory_config(k: Optional[int] = None, score_threshold: Opti
         database="default_database",
         k=k,
         score_threshold=score_threshold,
-        embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
-            model_name=config.EMBEDDING_MODEL_NAME
-        ),
+        embedding_function_config=DefaultEmbeddingFunctionConfig(),
     )
     
     return ChromaDBVectorMemory(config=memory_config)

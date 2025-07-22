@@ -7,7 +7,7 @@ import asyncio
 from typing import Optional
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
-from filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator, CollegeType
+from rag.filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator, CollegeType
 from src.constants import config
 
 class FilterExtractionAgent:
@@ -275,7 +275,7 @@ from typing import         try:
             # Extract JSON from response
             response_text = response.content if hasattr(response, 'content') else str(response)m autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
-from filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator, CollegeType
+from rag.filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator, CollegeType
 from src.constants import config
 
 class FilterExtractionAgent:

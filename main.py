@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from simplified_rag import SimplifiedCollegeRAGSystem
+from src.rag.simplified_rag import SimplifiedCollegeRAGSystem
 from src.constants import config
 
 

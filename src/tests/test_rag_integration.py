@@ -9,8 +9,8 @@ import asyncio
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from simplified_rag import SimplifiedCollegeRAGSystem, extract_filters_with_llm
-from filter_models import QueryAnalysis
+from rag.simplified_rag import SimplifiedCollegeRAGSystem, extract_filters_with_llm
+from rag.filter_models import QueryAnalysis
 
 class TestRAGSystemIntegration:
     """Integration tests for the complete RAG system."""
