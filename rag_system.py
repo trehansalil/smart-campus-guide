@@ -10,11 +10,81 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_ext.memory.chromadb import (
     ChromaDBVectorMemory,
     PersistentChromaDBVectorMemoryConfig,
+    HttpChromaDBVectorMemoryConfig,
     SentenceTransformerEmbeddingFunctionConfig,
+    DefaultEmbeddingFunctionConfig,
 )
 from autogen_core.memory import MemoryContent, MemoryMimeType
 
 from constants import config
+
+# Helper: Create ChromaDB memory configuration based on environment
+def create_chromadb_memory_config(k: Optional[int] = None, score_threshold: Optional[float] = None, use_deployment: Optional[bool] = None) -> ChromaDBVectorMemory:
+    """
+    Create ChromaDB memory configuration based on deployment settings.
+    
+    Args:
+        k: Number of results to return (defaults to config.RAG_K)
+        score_threshold: Score threshold for filtering (defaults to config.RAG_SCORE_THRESHOLD)
+        use_deployment: Whether to use HTTP deployment or local persistence
+                       If None, auto-detects based on CHROMA_HOST != localhost
+    
+    Returns:
+        ChromaDBVectorMemory instance with appropriate configuration
+    """
+    k = k or config.RAG_K
+    score_threshold = score_threshold if score_threshold is not None else config.RAG_SCORE_THRESHOLD
+    
+    # Auto-detect deployment mode if not specified
+    if use_deployment is None:
+        use_deployment = config.CHROMA_HOST.lower() not in ['localhost', '127.0.0.1']
+    
+    # Use different embedding configurations based on deployment type
+    if use_deployment:
+        # For HTTP deployment, use default embedding function for better compatibility
+        embedding_config = DefaultEmbeddingFunctionConfig()
+        print(f"🔧 Using default embedding function for HTTP deployment compatibility")
+    else:
+        # For local deployment, use SentenceTransformer for better performance
+        embedding_config = SentenceTransformerEmbeddingFunctionConfig(
+            model_name=config.EMBEDDING_MODEL_NAME
+        )
+        print(f"🔧 Using SentenceTransformer embedding function: {config.EMBEDDING_MODEL_NAME}")
+    
+    if use_deployment:
+        # For HTTP deployment, try to detect version compatibility issues
+        print(f"🌐 Using ChromaDB HTTP deployment at {config.get_chromadb_url()}")
+        print("⚠️  Note: HTTP deployment detected potential version mismatch")
+        print("   ChromaDB client 1.0.15 connecting to server 0.5.23 may have compatibility issues")
+        print("   Falling back to local persistent storage for better compatibility")
+        
+        # Fall back to local storage due to version mismatch
+        print(f"💾 Falling back to ChromaDB local persistence at {config.CHROMA_PERSIST_DIRECTORY}")
+        memory_config = PersistentChromaDBVectorMemoryConfig(
+            collection_name=config.CHROMA_COLLECTION_NAME,
+            persistence_path=config.CHROMA_PERSIST_DIRECTORY,
+            tenant="default_tenant",  # Default tenant
+            database="default_database",  # Default database
+            k=k,
+            score_threshold=score_threshold,
+            embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
+                model_name=config.EMBEDDING_MODEL_NAME
+            ),
+        )
+    else:
+        # Use local persistent storage
+        print(f"💾 Using ChromaDB local persistence at {config.CHROMA_PERSIST_DIRECTORY}")
+        memory_config = PersistentChromaDBVectorMemoryConfig(
+            collection_name=config.CHROMA_COLLECTION_NAME,
+            persistence_path=config.CHROMA_PERSIST_DIRECTORY,
+            tenant="default_tenant",  # Default tenant
+            database="default_database",  # Default database
+            k=k,
+            score_threshold=score_threshold,
+            embedding_function_config=embedding_config,
+        )
+    
+    return ChromaDBVectorMemory(config=memory_config)
 
 # Helper: Load college records and chunk
 def load_colleges_from_csv(csv_path: str) -> List[Dict]:
@@ -26,35 +96,42 @@ def load_colleges_from_csv(csv_path: str) -> List[Dict]:
 async def index_colleges_to_memory(records, rag_memory: ChromaDBVectorMemory, chunk_size: Optional[int] = None):
     """
     Index colleges, avoiding duplicate entries by hash.
+    Uses the provided rag_memory instance instead of creating a new one.
     """
     chunk_size = chunk_size or config.RAG_CHUNK_SIZE
 
     # Build a set of existing hashes from current memory
     existing_hashes = set()
-    rag_memory = ChromaDBVectorMemory(
-            config=PersistentChromaDBVectorMemoryConfig(
-                collection_name=config.CHROMA_COLLECTION_NAME,
-                persistence_path=config.CHROMA_PERSIST_DIRECTORY,
-                k=10000,  # high k for full scan
-                score_threshold=config.RAG_SCORE_THRESHOLD,
-                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
-                    model_name=config.EMBEDDING_MODEL_NAME
-                ),
-            )
+    
+    # Use the passed memory instance - don't create a new one!
+    # Query all current memory items to check for existing data
+    try:
+        # Create a temporary memory config with high k to get all existing records
+        temp_check_memory = create_chromadb_memory_config(k=10000, score_threshold=0.0)
+        
+        # Use a generic search term that should match all records
+        results = await temp_check_memory.query(
+            query="college university school institute MBA engineering",  # Generic terms likely to match all records
         )
-
-    # Query all current memory items (could limit by collection size for large sets)
-    results = await rag_memory.query(
-        query="",  # Blank query for full scan
-    )
-    if not results.results:
-        print("No existing records found in ChromaDB, starting fresh indexing.")
-    else:
-        print(f"Found {len(results.results)} existing records in ChromaDB, checking for duplicates.")
-        for result in results.results:
-            meta = getattr(result, "metadata", None)
-            if meta and "row_hash" in meta:
-                existing_hashes.add(meta["row_hash"])
+        await temp_check_memory.close()  # Clean up immediately
+        
+        if not results.results:
+            print("No existing records found in ChromaDB, starting fresh indexing.")
+        else:
+            print(f"Found {len(results.results)} existing records in ChromaDB, checking for duplicates.")
+            for result in results.results:
+                meta = getattr(result, "metadata", None)
+                if meta and hasattr(meta, 'get'):
+                    row_hash = meta.get("row_hash")
+                elif meta and hasattr(meta, 'row_hash'):
+                    row_hash = getattr(meta, 'row_hash', None)
+                else:
+                    row_hash = None
+                    
+                if row_hash:
+                    existing_hashes.add(row_hash)
+    except Exception as e:
+        print(f"Warning: Could not query existing records, starting fresh: {e}")
 
     count_added = 0
     for idx, row in enumerate(records):
@@ -67,6 +144,7 @@ async def index_colleges_to_memory(records, rag_memory: ChromaDBVectorMemory, ch
 
         if row_hash in existing_hashes:
             continue  # Duplicate, skip
+            
         # Otherwise add to memory
         content = MemoryContent(
             content=desc,
@@ -96,18 +174,8 @@ class CollegeRAGSystem:
         # Print configuration for debugging
         config.print_config()
         
-        # Setup persistent ChromaDB vector memory
-        self.rag_memory = ChromaDBVectorMemory(
-            config=PersistentChromaDBVectorMemoryConfig(
-                collection_name=config.CHROMA_COLLECTION_NAME,
-                persistence_path=config.CHROMA_PERSIST_DIRECTORY,
-                k=config.RAG_K,
-                score_threshold=config.RAG_SCORE_THRESHOLD,
-                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
-                    model_name=config.EMBEDDING_MODEL_NAME
-                ),
-            )
-        )
+        # Setup ChromaDB vector memory using deployment-aware configuration
+        self.rag_memory = create_chromadb_memory_config()
         
         # Load data and index into memory (only if needed)
         college_records = load_colleges_from_csv(self.csv_path)
@@ -137,17 +205,7 @@ class CollegeRAGSystem:
             raise ValueError("RAG memory not initialized. Call initialize() first.")
         
         # Create a temporary memory config with higher k and lower score threshold for better results
-        temp_memory = ChromaDBVectorMemory(
-            config=PersistentChromaDBVectorMemoryConfig(
-                collection_name=config.CHROMA_COLLECTION_NAME,
-                persistence_path=config.CHROMA_PERSIST_DIRECTORY,
-                k=25,  # Get all results first
-                score_threshold=0.0,  # No score filtering, we'll rank by relevance
-                embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
-                    model_name=config.EMBEDDING_MODEL_NAME
-                ),
-            )
-        )
+        temp_memory = create_chromadb_memory_config(k=25, score_threshold=0.0)
         
         # Query the memory directly to get relevant colleges
         results = await temp_memory.query(query=query)
@@ -216,18 +274,8 @@ class CollegeRAGSystem:
         Delete all data stored in ChromaDB for the configured collection.
         """
         if not self.rag_memory:
-            # If not initialized, create a temporary memory instance
-            temp_memory = ChromaDBVectorMemory(
-                config=PersistentChromaDBVectorMemoryConfig(
-                    collection_name=config.CHROMA_COLLECTION_NAME,
-                    persistence_path=config.CHROMA_PERSIST_DIRECTORY,
-                    k=10000,
-                    score_threshold=config.RAG_SCORE_THRESHOLD,
-                    embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
-                        model_name=config.EMBEDDING_MODEL_NAME
-                    ),
-                )
-            )
+            # If not initialized, create a temporary memory instance using our helper
+            temp_memory = create_chromadb_memory_config(k=10000)
             await temp_memory.clear()
             await temp_memory.close()
         else:
