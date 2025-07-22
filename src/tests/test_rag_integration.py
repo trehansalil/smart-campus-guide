@@ -24,7 +24,7 @@ class TestRAGSystemIntegration:
         print("🧪 Testing RAG system initialization")
         
         try:
-            self.rag_system = SimplifiedCollegeRAGSystem()
+            self.rag_system: SimplifiedCollegeRAGSystem = SimplifiedCollegeRAGSystem()
             await self.rag_system.initialize()
             assert self.rag_system is not None, "RAG system should be initialized"
             print("  ✅ RAG system initialized successfully")
