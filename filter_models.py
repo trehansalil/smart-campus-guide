@@ -44,7 +44,7 @@ class CollegeFilters(BaseModel):
     # College metadata filters
     city: Optional[str] = Field(None, description="City where the college is located")
     state: Optional[str] = Field(None, description="State where the college is located")
-    course: Optional[str] = Field(None, description="Course/program offered (MBA, Engineering, etc.)")
+    course: Optional[str] = Field(None, pattern=r'^(MBA|Engineering|Medical|Law|Design)$', description="Course/program offered (MBA, Engineering, etc.)")
     college_type: Optional[str] = Field(None, description="Type of college (private, govt, deemed)")
     
     # Numeric filters with operators
