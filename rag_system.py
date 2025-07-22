@@ -2,8 +2,9 @@ import hashlib
 import os
 import pandas as pd
 import asyncio
+import re
 from pathlib import Path
-from typing import AsyncGenerator, List, Dict, Optional
+from typing import AsyncGenerator, List, Dict, Optional, Union
 
 from autogen_agentchat.agents import AssistantAgent
 from autogen_ext.models.openai import OpenAIChatCompletionClient
@@ -18,8 +19,130 @@ from autogen_core.memory import MemoryContent, MemoryMimeType
 
 from constants import config
 
+# Helper: Parse query for metadata filters
+def parse_metadata_filters(query: str) -> tuple[str, Dict]:
+    """
+    Parse query string to extract metadata filters and clean query.
+    
+    Supported filter patterns:
+    - fees < ₹10L, fees <= 10 lakhs, fees under 1000000
+    - type = private, type: government, type is govt
+    - city = mumbai, city: delhi, in bangalore
+    - ranking < 50, rank <= 20, ranking better than 30
+    - package > ₹5L, avg_package >= 500000
+    
+    Args:
+        query: Original query string
+        
+    Returns:
+        tuple: (cleaned_query, filters_dict)
+    """
+    filters = {}
+    cleaned_query = query.lower()
+    
+    # Pattern for fees filters (supports ₹, lakhs, L notation)
+    fees_patterns = [
+        r'fees?\s*(?:under|<|<=|less than|below)\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?',
+        r'fees?\s*(?:above|>|>=|more than|over)\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?',
+        r'under\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?\s*fees?',
+        r'(?:under|below)\s*(\d+)\s*(?:l|lakh|lakhs?)',  # Handle "under 10 lakhs"
+    ]
+    
+    for pattern in fees_patterns:
+        match = re.search(pattern, cleaned_query, re.IGNORECASE)
+        if match:
+            amount = float(match.group(1))
+            # Convert lakhs to actual amount
+            if any(unit in match.group(0).lower() for unit in ['l', 'lakh']):
+                amount *= 100000
+            
+            if any(op in match.group(0) for op in ['under', '<', 'less', 'below']):
+                filters['fees'] = {'$lt': int(amount)}
+            elif any(op in match.group(0) for op in ['above', '>', 'more', 'over']):
+                filters['fees'] = {'$gt': int(amount)}
+            
+            # Remove the filter pattern from query
+            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
+    
+    # Pattern for type filters
+    type_patterns = [
+        r'type\s*(?:=|:|\bis\b)\s*(private|government|govt|public)',
+        r'(private|government|govt|public)\s*(?:college|university|institute)',
+    ]
+    
+    for pattern in type_patterns:
+        match = re.search(pattern, cleaned_query, re.IGNORECASE)
+        if match:
+            college_type = match.group(1).lower()
+            # Normalize type values
+            if college_type in ['government', 'govt', 'public']:
+                filters['type'] = 'Govt'
+            elif college_type == 'private':
+                filters['type'] = 'Private'
+            
+            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
+    
+    # Pattern for city filters - improve to avoid false matches
+    city_patterns = [
+        r'city\s*(?:=|:|\bis\b)\s*(\w+)',
+        r'\bin\s+([A-Z][a-z]+)(?:\s+city)?',  # Match "in Mumbai", "in Delhi" with capital letters
+        r'([A-Z][a-z]+)\s+(?:colleges?|universities?)',  # Match "Mumbai colleges", "Delhi universities"
+    ]
+    
+    for pattern in city_patterns:
+        match = re.search(pattern, cleaned_query, re.IGNORECASE)
+        if match:
+            city = match.group(1).title()  # Capitalize city name
+            filters['city'] = city
+            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
+            break  # Only take the first city match
+    
+    # Pattern for ranking filters
+    ranking_patterns = [
+        r'rank(?:ing)?\s*(?:<|<=|less than|under|better than)\s*(\d+)',
+        r'rank(?:ing)?\s*(?:>|>=|more than|above|worse than)\s*(\d+)',
+        r'top\s*(\d+)\s*rank(?:ing|ed)?',
+    ]
+    
+    for pattern in ranking_patterns:
+        match = re.search(pattern, cleaned_query, re.IGNORECASE)
+        if match:
+            rank = int(match.group(1))
+            
+            if any(op in match.group(0) for op in ['<', 'less', 'under', 'better']):
+                filters['ranking'] = {'$lt': rank}
+            elif any(op in match.group(0) for op in ['>', 'more', 'above', 'worse']):
+                filters['ranking'] = {'$gt': rank}
+            elif 'top' in match.group(0):
+                filters['ranking'] = {'$lte': rank}
+            
+            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
+    
+    # Pattern for package filters
+    package_patterns = [
+        r'package\s*(?:>|>=|above|more than)\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?',
+        r'placement\s*(?:>|>=|above|more than)\s*₹?(\d+(?:\.\d+)?)(?:l|lakh|lakhs?)?',
+    ]
+    
+    for pattern in package_patterns:
+        match = re.search(pattern, cleaned_query, re.IGNORECASE)
+        if match:
+            amount = float(match.group(1))
+            # Convert lakhs to actual amount
+            if any(unit in match.group(0).lower() for unit in ['l', 'lakh']):
+                amount *= 100000
+                
+            filters['avg_package'] = {'$gt': int(amount)}
+            cleaned_query = re.sub(pattern, '', cleaned_query, flags=re.IGNORECASE).strip()
+    
+    # Clean up the query - remove extra spaces, common words
+    cleaned_query = re.sub(r'\s+', ' ', cleaned_query).strip()
+    cleaned_query = re.sub(r'\b(?:best|top|good|excellent)\b', '', cleaned_query, flags=re.IGNORECASE).strip()
+    
+    return cleaned_query, filters
+
 # Helper: Create ChromaDB memory configuration based on environment
-def create_chromadb_memory_config(k: Optional[int] = None, score_threshold: Optional[float] = None, use_deployment: Optional[bool] = None) -> ChromaDBVectorMemory:
+def create_chromadb_memory_config(k: Optional[int] = None, score_threshold: Optional[float] = None, use_deployment: Optional[bool] = True) -> ChromaDBVectorMemory:
     """
     Create ChromaDB memory configuration based on deployment settings.
     
@@ -204,15 +327,59 @@ class CollegeRAGSystem:
         if not self.rag_memory:
             raise ValueError("RAG memory not initialized. Call initialize() first.")
         
-        # Create a temporary memory config with higher k and lower score threshold for better results
-        temp_memory = create_chromadb_memory_config(k=25, score_threshold=0.0)
+        # Parse query for metadata filters
+        cleaned_query, metadata_filters = parse_metadata_filters(query)
         
-        # Query the memory directly to get relevant colleges
-        results = await temp_memory.query(query=query)
+        print(f"🔍 Original query: {query}")
+        if metadata_filters:
+            print(f"🎯 Extracted filters: {metadata_filters}")
+            print(f"🧹 Cleaned query: {cleaned_query}")
+        
+        # Create a temporary memory config with higher k and lower score threshold for better results
+        temp_memory = create_chromadb_memory_config(k=50, score_threshold=0.0)
+        
+        # Query the memory directly to get relevant colleges with metadata filters
+        try:
+            if metadata_filters:
+                # Convert filters to ChromaDB format - use $and for multiple conditions
+                if len(metadata_filters) > 1:
+                    # Multiple filters need to be combined with $and
+                    chroma_filter = {"$and": []}
+                    for key, value in metadata_filters.items():
+                        if isinstance(value, dict):
+                            # Handle operators like $lt, $gt
+                            for op, val in value.items():
+                                chroma_filter["$and"].append({key: {op: val}})
+                        else:
+                            # Handle direct equality
+                            chroma_filter["$and"].append({key: value})
+                else:
+                    # Single filter can be used directly
+                    chroma_filter = metadata_filters
+                
+                print(f"🔧 ChromaDB filter format: {chroma_filter}")
+                
+                results = await temp_memory.query(
+                    query=cleaned_query or "college university institute",
+                    where=chroma_filter
+                )
+            else:
+                # Standard query without filters
+                results = await temp_memory.query(query=query)
+                
+        except Exception as e:
+            print(f"⚠️  Metadata filtering failed, falling back to standard query: {e}")
+            # Fallback to standard query if metadata filtering fails
+            results = await temp_memory.query(query=query)
+            
         await temp_memory.close()  # Clean up the temporary memory
         
         if not results.results:
+            if metadata_filters:
+                return f"No colleges found matching your criteria. Try adjusting your filters: {metadata_filters}"
             return "No matching colleges found for your query."
+        
+        print(f"📊 Found {len(results.results)} results after filtering")
         
         # Format the top 3 unique results as a clean markdown list
         formatted_results = []
@@ -256,10 +423,28 @@ class CollegeRAGSystem:
             )
         
         if not formatted_results:
+            if metadata_filters:
+                return f"No colleges found matching your criteria. Applied filters: {metadata_filters}"
             return "No matching colleges found for your query."
         
-        # Add a header and return the formatted list
-        header = f"**Top {len(formatted_results)} College{'s' if len(formatted_results) != 1 else ''} matching your query:**\n\n"
+        # Add a header with filter information
+        filter_info = ""
+        if metadata_filters:
+            filter_parts = []
+            for key, value in metadata_filters.items():
+                if isinstance(value, dict):
+                    for op, val in value.items():
+                        op_text = {"$lt": "under", "$lte": "≤", "$gt": "above", "$gte": "≥"}.get(op, op)
+                        if key == 'fees' and val >= 100000:
+                            val_text = f"₹{val//100000}L"
+                        else:
+                            val_text = str(val)
+                        filter_parts.append(f"{key} {op_text} {val_text}")
+                else:
+                    filter_parts.append(f"{key}={value}")
+            filter_info = f" (Filtered by: {', '.join(filter_parts)})"
+        
+        header = f"**Top {len(formatted_results)} College{'s' if len(formatted_results) != 1 else ''} matching your query{filter_info}:**\n\n"
         return header + "\n".join(formatted_results)
 
     # Clean up resources (recommended in long-running jobs)
@@ -298,11 +483,13 @@ if __name__ == "__main__":
         rag = CollegeRAGSystem()
         await rag.initialize()
         
-        # Test multiple queries to show the improved functionality
+        # Test multiple queries to show the improved functionality with metadata filters
         test_queries = [
             "Best private MBA colleges in Delhi under 10 lakhs fees",
-            "Top engineering colleges in Mumbai",
-            "Government colleges for MBA in India"
+            "Engineering colleges in Mumbai with fees < ₹2L",
+            "Government colleges with ranking better than 30",
+            "Private colleges in Bangalore with package > ₹8L",
+            "MBA colleges with fees under ₹5 lakhs and type = private"
         ]
         
         for query in test_queries:
