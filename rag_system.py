@@ -144,7 +144,7 @@ class CollegeRAGSystem:
         response = ""
         async for chunk in stream:
             if hasattr(chunk, "content"):
-                response += str(chunk.content)
+                response += str(getattr(chunk, "content"))
         return response.strip()
 
     # Clean up resources (recommended in long-running jobs)
@@ -153,6 +153,29 @@ class CollegeRAGSystem:
             await self.model_client.close()
         if self.rag_memory:
             await self.rag_memory.close()
+
+    async def delete_all_chromadb_data(self):
+        """
+        Delete all data stored in ChromaDB for the configured collection.
+        """
+        if not self.rag_memory:
+            # If not initialized, create a temporary memory instance
+            temp_memory = ChromaDBVectorMemory(
+                config=PersistentChromaDBVectorMemoryConfig(
+                    collection_name=config.CHROMA_COLLECTION_NAME,
+                    persistence_path=config.CHROMA_PERSIST_DIRECTORY,
+                    k=10000,
+                    score_threshold=config.RAG_SCORE_THRESHOLD,
+                    embedding_function_config=SentenceTransformerEmbeddingFunctionConfig(
+                        model_name=config.EMBEDDING_MODEL_NAME
+                    ),
+                )
+            )
+            await temp_memory.clear()
+            await temp_memory.close()
+        else:
+            await self.rag_memory.clear()
+        print(f"All data deleted from ChromaDB collection '{config.CHROMA_COLLECTION_NAME}'.")
 
 # Usage Example
 if __name__ == "__main__":
@@ -173,6 +196,7 @@ if __name__ == "__main__":
         print("Query:", query)
         answer = await rag.recommend(query)
         print("\nResult:\n", answer)
+        await rag.delete_all_chromadb_data()
         await rag.close()
     
     asyncio.run(_demo())
