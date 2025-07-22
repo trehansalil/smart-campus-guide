@@ -68,7 +68,7 @@ Template file showing all available environment variables with example values.
 
 ### Basic Usage
 ```python
-from constants import config
+from src.constants import config
 from rag_system import CollegeRAGSystem
 
 # The config automatically loads environment variables
@@ -78,7 +78,7 @@ await rag.initialize()
 
 ### Configuration Validation
 ```python
-from constants import config
+from src.constants import config
 
 # Check for missing required variables
 missing_vars = config.validate_required_env_vars()
@@ -90,7 +90,7 @@ else:
 
 ### Print Current Configuration
 ```python
-from constants import config
+from src.constants import config
 
 # Print current configuration (excluding sensitive data)
 config.print_config()
@@ -99,7 +99,7 @@ config.print_config()
 ### Dynamic Configuration
 ```python
 import os
-from constants import Config
+from src.constants import config
 
 # Override environment variables at runtime
 os.environ["RAG_K"] = "10"

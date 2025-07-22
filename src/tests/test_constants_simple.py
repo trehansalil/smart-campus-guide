@@ -8,7 +8,7 @@ import os
 # Add parent directory to path to import constants
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from constants import config
+from src.constants import config
 
 class TestConstants:
     """Test class for constants validation."""

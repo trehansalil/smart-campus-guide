@@ -8,7 +8,7 @@ from typing import Optional
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
 from filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator, CollegeType
-from constants import config
+from src.constants import config
 
 class FilterExtractionAgent:
     """
@@ -276,7 +276,7 @@ from typing import         try:
             response_text = response.content if hasattr(response, 'content') else str(response)m autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
 from filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator, CollegeType
-from constants import config
+from src.constants import config
 
 class FilterExtractionAgent:
     """

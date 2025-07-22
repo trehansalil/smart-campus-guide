@@ -4,7 +4,7 @@ Run this script to test the college recommendation system.
 """
 import asyncio
 import sys
-from constants import config
+from src.constants import config
 from rag_system import CollegeRAGSystem
 
 

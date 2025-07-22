@@ -108,7 +108,7 @@ openai_model = os.getenv("OPENAI_RAG_MODEL", "gpt-4")
 persist_path = os.getenv("CHROMA_PERSIST_DIRECTORY", os.path.join(str(Path.home()), ".chromadb_autogen"))
 
 # After (centralized configuration)
-from constants import config
+from src.constants import config
 openai_model = config.OPENAI_RAG_MODEL
 persist_path = config.CHROMA_PERSIST_DIRECTORY
 
