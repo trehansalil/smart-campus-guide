@@ -68,16 +68,72 @@ Ensure you have a `college_dataset.csv` file in the project root with the follow
 
 ### 4. Run the Application
 
+**Option A: Full Stack (FastAPI + Streamlit) - Recommended**
+```bash
+# Start both backend and frontend
+./start_app.sh
+
+# Or start components individually
+./start_app.sh api        # Start only FastAPI backend  
+./start_app.sh frontend   # Start only Streamlit frontend
+./start_app.sh status     # Check service status
+./start_app.sh stop       # Stop all services
+```
+
+**Option B: Backend Only (FastAPI)**
 ```bash
 # Start the FastAPI server
-uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8001
 
 # Alternative: Direct Python execution
 python main.py
 ```
 
-The API will be available at:
-- **API Endpoints**: http://localhost:8000
+**Option C: Frontend Only (Streamlit)**
+```bash
+# Start the Streamlit web interface
+streamlit run streamlit_app.py
+```
+
+The services will be available at:
+- **Streamlit Frontend**: http://localhost:8501 (Web UI)
+- **FastAPI Backend**: http://localhost:8001 (API)
+- **API Documentation**: http://localhost:8001/docs
+- **Health Check**: http://localhost:8001/health
+
+## 🎨 Streamlit Web Interface
+
+The Smart Campus Guide includes a beautiful, user-friendly web interface built with Streamlit:
+
+### 🏠 Features
+
+- **🔍 Intelligent Search**: Natural language college search with real-time recommendations
+- **📊 Batch Analysis**: Compare multiple queries simultaneously for better decision making
+- **⚙️ System Monitoring**: Real-time health checks and performance metrics
+- **📚 Help & Examples**: Comprehensive guides with query templates and best practices
+- **🎯 Smart Filtering**: AI-powered understanding of location, budget, and course preferences
+
+### 🚀 Quick Demo
+
+1. **Start the complete system:**
+   ```bash
+   ./start_app.sh
+   ```
+
+2. **Open your browser to http://localhost:8501**
+
+3. **Try example searches:**
+   - "MBA colleges in Mumbai under 10 lakhs"
+   - "Engineering colleges in Bangalore with good placements"
+   - "Private medical colleges with scholarship options"
+
+### 📱 Interface Pages
+
+- **Home**: Quick search, recent queries, and feature overview
+- **Search Colleges**: Detailed search with natural language queries
+- **Batch Analysis**: Compare multiple search queries side-by-side
+- **System Status**: Monitor API health, RAG system status, and performance
+- **Help & Examples**: Query templates, best practices, and FAQ
 - **Interactive Docs**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
@@ -160,7 +216,17 @@ Production-ready REST API server:
 - **Health Checks**: System status monitoring
 - **Auto Documentation**: OpenAPI/Swagger integration
 
-#### 4. **Configuration Management** (`src/constants.py`)
+#### 4. **Streamlit Frontend** (`streamlit_app.py`)
+User-friendly web interface:
+
+- **Intuitive UI**: Clean, modern design with custom styling
+- **Real-time Search**: Instant college recommendations
+- **Batch Processing**: Compare multiple queries simultaneously
+- **System Monitoring**: Live health checks and metrics
+- **Interactive Help**: Examples, templates, and best practices
+- **Responsive Design**: Works on desktop and mobile devices
+
+#### 5. **Configuration Management** (`src/constants.py`)
 Centralized environment variable management:
 
 - **Environment Variables**: Secure API key handling
@@ -181,14 +247,23 @@ User Query → LLM Filter Extraction → ChromaDB Vector Search → Result Ranki
 ```plaintext
 smart-campus-guide/
 ├── main.py                          # FastAPI application entry point
+├── streamlit_app.py                 # Streamlit web interface
+├── start_app.sh                     # Full-stack startup script
+├── demo.py                          # System demo and testing script
 ├── college_dataset.csv              # College data (not included, provide your own)
 ├── pyproject.toml                   # Python project configuration
 ├── uv.lock                         # Locked dependencies
 ├── .env                            # Environment variables (create this)
 ├── chromadb.sh                     # ChromaDB deployment script
 │
+├── .streamlit/                     # Streamlit configuration
+│   └── config.toml                 # Streamlit settings
+│
 ├── src/                            # Source code
 │   ├── constants.py                # Configuration management
+│   ├── api/                        # Enhanced API endpoints
+│   │   ├── __init__.py            
+│   │   └── enhanced_endpoints.py   # Additional FastAPI endpoints
 │   └── rag/                        # RAG system components
 │       ├── simplified_rag.py       # Main RAG implementation
 │       ├── filter_models.py        # Pydantic data models
@@ -214,13 +289,48 @@ smart-campus-guide/
 │
 ├── docs/                           # Documentation
 │   ├── CONSTANTS_IMPLEMENTATION_SUMMARY.md
-│   └── ENVIRONMENT_VARIABLES.md
+│   ├── ENVIRONMENT_VARIABLES.md
+│   ├── README_STREAMLIT.md         # Streamlit documentation
+│   └── COMPLETE_GUIDE.md           # Complete setup guide
 │
 └── config/                         # Configuration files
     └── config.yaml                 # Application settings
 ```
 
-## � ChromaDB Vector Database
+## 🎯 Usage Examples
+
+### Web Interface (Recommended)
+```bash
+# Start the complete system
+./start_app.sh
+
+# Open browser to http://localhost:8501
+# Use the intuitive web interface for searching
+```
+
+### API Usage
+```bash
+# Basic search
+curl -X POST "http://localhost:8001/recommend" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "MBA colleges in Mumbai under 10 lakhs"}'
+
+# Batch search
+curl -X POST "http://localhost:8001/recommend/batch" \
+  -H "Content-Type: application/json" \
+  -d '["MBA in Delhi", "Engineering in Bangalore"]'
+```
+
+### Demo & Testing
+```bash
+# Run the comprehensive demo
+python demo.py
+
+# Check service status
+./start_app.sh status
+```
+
+## 📊 ChromaDB Vector Database
 
 The system uses ChromaDB as the vector database for storing and querying college embeddings.
 

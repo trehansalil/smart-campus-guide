@@ -14,11 +14,20 @@ from pydantic import BaseModel, Field
 
 from src.rag.simplified_rag import SimplifiedCollegeRAGSystem
 from src.constants import config
+# Import enhanced endpoints (optional)
+try:
+    from src.api.enhanced_endpoints import enhanced_router
+    ENHANCED_ENDPOINTS_AVAILABLE = True
+except ImportError:
+    ENHANCED_ENDPOINTS_AVAILABLE = False
+    enhanced_router = None
 
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+logger.info(f"🔧 Smart Campus Guide API - Initializing... - {ENHANCED_ENDPOINTS_AVAILABLE}")
 
 # Global RAG system instance
 rag_system: Optional[SimplifiedCollegeRAGSystem] = None
@@ -97,6 +106,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include enhanced endpoints if available
+if ENHANCED_ENDPOINTS_AVAILABLE and enhanced_router:
+    app.include_router(enhanced_router)
+    logger.info("✅ Enhanced API endpoints loaded")
 
 
 @app.get("/")
