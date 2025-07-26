@@ -43,7 +43,7 @@ class CollegeFilters(BaseModel):
     
     # College metadata filters
     city: Optional[str] = Field(None, description="City where the college is located")
-    state: Optional[str] = Field(None, description="State where the college is located")
+    state: Optional[str] = Field(None, pattern=r'(Andhra Pradesh|Arunachal Pradesh|Assam|Bihar|Chhattisgarh|Goa|Gujarat|Haryana|Himachal Pradesh|Jharkhand|Karnataka|Kerala|Madhya Pradesh|Maharashtra|Manipur|Meghalaya|Mizoram|Nagaland|Odisha|Punjab|Rajasthan|Sikkim|Tamil Nadu|Telangana|Tripura|Uttar Pradesh|Uttarakhand|West Bengal)', description="State where the college is located")
     course: Optional[str] = Field(None, pattern=r'^(MBA|Engineering|Medical|Medicine|Law|Design)$', description="Course/program offered (MBA, Engineering, etc.)")
     college_type: Optional[str] = Field(None, description="Type of college (private, govt, deemed)")
     
