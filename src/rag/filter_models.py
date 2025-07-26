@@ -2,9 +2,30 @@
 Pydantic models for structured metadata filtering in the Smart Campus Guide RAG system.
 """
 
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, validator
 from enum import Enum
+
+# Mapping for state to cities (based on our dataset)
+STATE_TO_CITIES = {
+    "Delhi": ["Delhi"],
+    "Maharashtra": ["Mumbai", "Pune", "Nagpur"],
+    "Tamil Nadu": ["Chennai", "Vellore"],
+    "Karnataka": ["Bangalore"],
+    "Telangana": ["Hyderabad"],
+    "West Bengal": ["Kolkata"],
+    "Gujarat": ["Ahmedabad"],
+    "Uttarakhand": ["Roorkee"]
+}
+
+# Mapping for regions to cities (based on our dataset)
+REGION_TO_CITIES = {
+    "North": ["Delhi", "Roorkee"],
+    "South": ["Chennai", "Bangalore", "Hyderabad", "Vellore"],
+    "West": ["Mumbai", "Pune", "Ahmedabad", "Nagpur"],
+    "East": ["Kolkata"],
+    "Central": []  # No cities in our dataset fall in Central region
+}
 
 class CollegeType(str, Enum):
     """Enum for college types"""
@@ -43,8 +64,9 @@ class CollegeFilters(BaseModel):
     
     # College metadata filters
     city: Optional[str] = Field(None, description="City where the college is located")
-    state: Optional[str] = Field(None, pattern=r'(Andhra Pradesh|Arunachal Pradesh|Assam|Bihar|Chhattisgarh|Goa|Gujarat|Haryana|Himachal Pradesh|Jharkhand|Karnataka|Kerala|Madhya Pradesh|Maharashtra|Manipur|Meghalaya|Mizoram|Nagaland|Odisha|Punjab|Rajasthan|Sikkim|Tamil Nadu|Telangana|Tripura|Uttar Pradesh|Uttarakhand|West Bengal)', description="State where the college is located")
+    state: Optional[str] = Field(None, pattern=r'(Delhi|Andhra Pradesh|Arunachal Pradesh|Assam|Bihar|Chhattisgarh|Goa|Gujarat|Haryana|Himachal Pradesh|Jharkhand|Karnataka|Kerala|Madhya Pradesh|Maharashtra|Manipur|Meghalaya|Mizoram|Nagaland|Odisha|Punjab|Rajasthan|Sikkim|Tamil Nadu|Telangana|Tripura|Uttar Pradesh|Uttarakhand|West Bengal)', description="State/UT where the college is located")
     course: Optional[str] = Field(None, pattern=r'^(MBA|Engineering|Medical|Medicine|Law|Design)$', description="Course/program offered (MBA, Engineering, etc.)")
+    region: Optional[str] = Field(None, pattern=r'^(South|North|East|West|Central)$', description="Region of India (North, South, East, West)")
     college_type: Optional[str] = Field(None, description="Type of college (private, govt, deemed)")
     
     # Numeric filters with operators
@@ -69,20 +91,62 @@ class CollegeFilters(BaseModel):
         """Convert exam names to uppercase"""
         return v.upper() if v else v
 
+    def get_filtered_cities(self) -> List[str]:
+        """
+        Get the list of cities that match the location filters.
+        Priority: city > state > region
+        
+        Returns:
+            List[str]: List of cities that match the filters
+        """
+        cities = []
+        
+        # Priority: city first, then state, then region
+        if self.city:
+            cities.append(self.city)
+        elif self.state and self.state in STATE_TO_CITIES:
+            cities.extend(STATE_TO_CITIES[self.state])
+        elif self.region and self.region in REGION_TO_CITIES:
+            cities.extend(REGION_TO_CITIES[self.region])
+        
+        return list(set(cities))  # Remove duplicates
+
     def to_chromadb_filters(self) -> dict:
         """
         Convert the Pydantic model to ChromaDB filter format.
+        Maps state and region filters to city filters since ChromaDB only has city data.
         
         Returns:
             dict: ChromaDB-compatible filter dictionary
         """
         filters = {}
         
-        # Simple equality filters
+        # Handle city filtering with state and region mapping
+        cities_to_filter = []
+        
+        # Priority: Direct city filter takes precedence
         if self.city:
-            filters['city'] = self.city
-        if self.state:
-            filters['state'] = self.state
+            cities_to_filter.append(self.city)
+        # Then state to cities mapping
+        elif self.state and self.state in STATE_TO_CITIES:
+            cities_from_state = STATE_TO_CITIES[self.state]
+            cities_to_filter.extend(cities_from_state)
+        # Finally region to cities mapping
+        elif self.region and self.region in REGION_TO_CITIES:
+            cities_from_region = REGION_TO_CITIES[self.region]
+            cities_to_filter.extend(cities_from_region)
+        
+        # Apply city filter if we have cities to filter by
+        if cities_to_filter:
+            # Remove duplicates and create ChromaDB filter
+            unique_cities = list(set(cities_to_filter))
+            if len(unique_cities) == 1:
+                filters['city'] = unique_cities[0]
+            else:
+                # Use $in operator for multiple cities
+                filters['city'] = {"$in": unique_cities}
+        
+        # Other filters remain the same
         if self.course:
             filters['course'] = self.course
         if self.college_type:
@@ -110,10 +174,32 @@ class CollegeFilters(BaseModel):
         """
         parts = []
         
+        # Handle location filtering with priority: city > state > region
+        location_parts = []
         if self.city:
-            parts.append(f"in {self.city}")
-        if self.state:
-            parts.append(f"in {self.state} state")
+            location_parts.append(f"in {self.city}")
+        elif self.state:
+            cities = STATE_TO_CITIES.get(self.state, [])
+            if cities:
+                if len(cities) == 1:
+                    location_parts.append(f"in {cities[0]} ({self.state})")
+                else:
+                    location_parts.append(f"in {self.state} state")
+            else:
+                location_parts.append(f"in {self.state} state")
+        elif self.region:
+            cities = REGION_TO_CITIES.get(self.region, [])
+            if cities:
+                if len(cities) <= 3:
+                    city_list = ", ".join(cities)
+                    location_parts.append(f"in {self.region} India ({city_list})")
+                else:
+                    location_parts.append(f"in {self.region} India")
+            else:
+                location_parts.append(f"in {self.region} India")
+        
+        parts.extend(location_parts)
+        
         if self.course:
             parts.append(f"for {self.course}")
         if self.college_type:
