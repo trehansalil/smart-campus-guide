@@ -1,4 +1,6 @@
 import hashlib
+from fastapi import logger
+import instructor
 import pandas as pd
 import asyncio
 from typing import List, Dict, Optional
@@ -19,7 +21,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.constants import config
-from filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator
+from .filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator
 
 # Simple LLM-based filter extraction (without complex autogen agent setup)
 async def extract_filters_with_llm(query: str) -> QueryAnalysis:
@@ -40,20 +42,32 @@ Extract filter criteria and respond with valid JSON containing:
 
 Supported filters:
 - city: String (e.g., "Mumbai", "Delhi") - use title case
+- state: String (e.g., "Maharashtra", "Karnataka", "Tamil Nadu") - use title case
+- region: String (e.g., "North", "South", "East", "West") - use title case
 - course: String (e.g., "MBA", "Engineering", "Medical") - use title case exactly as shown
 - fees: Object with {value: number, operator: "lt"/"gt"/"eq"} (convert lakhs to actual amounts)
 - avg_package: Object with {value: number, operator: "lt"/"gt"/"eq"}
 - ranking: Object with {value: number, operator: "lt"/"gt"/"eq"} (lower = better)
 - college_type: String ("private" or "govt") - use lowercase
 
-IMPORTANT: Use these exact values for consistency:
+IMPORTANT: Extract state and region filters properly:
+- States: "Delhi", "Maharashtra", "Tamil Nadu", "Karnataka", "Telangana", "West Bengal", "Gujarat", "Uttarakhand"
+- Regions: "North", "South", "East", "West", "Central"
 - For college_type: "private" or "govt" (lowercase)
 - For course: "MBA", "Engineering", "Medical" (title case, not ALL CAPS)
-- For city: "Delhi", "Mumbai", "Bangalore" (title case)
 
-Example:
+Examples:
 Query: "MBA colleges in Delhi under 10 lakhs fees"
 Response: {"filters": {"city": "Delhi", "course": "MBA", "fees": {"value": 1000000, "operator": "lt"}}, "cleaned_query": "colleges", "intent": "find_colleges", "confidence": 0.9}
+
+Query: "MBA colleges in South India"
+Response: {"filters": {"region": "South", "course": "MBA"}, "cleaned_query": "colleges", "intent": "find_colleges", "confidence": 0.9}
+
+Query: "Engineering colleges in Maharashtra"
+Response: {"filters": {"state": "Maharashtra", "course": "Engineering"}, "cleaned_query": "colleges", "intent": "find_colleges", "confidence": 0.9}
+
+Query: "Best private colleges in Tamil Nadu for Medical"
+Response: {"filters": {"state": "Tamil Nadu", "course": "Medical", "college_type": "private"}, "cleaned_query": "best colleges", "intent": "find_colleges", "confidence": 0.9}
 
 Analyze this query:"""
 
@@ -61,9 +75,11 @@ Analyze this query:"""
             api_key=config.OPENAI_RAG_MODEL_API_KEY,
             base_url=config.OPENAI_RAG_MODEL_API_BASE
         )
+        client = instructor.from_openai(client)
         
-        response = await client.chat.completions.create(
+        response_data: QueryAnalysis = await client.chat.completions.create(
             model=config.OPENAI_RAG_MODEL,
+            response_model=QueryAnalysis,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": query}
@@ -72,25 +88,8 @@ Analyze this query:"""
             max_tokens=500
         )
         
-        response_text = response.choices[0].message.content
-        
-        if not response_text:
-            raise ValueError("Empty response from LLM")
-            
-        # Parse JSON response
-        json_start = response_text.find('{')
-        json_end = response_text.rfind('}') + 1
-        
-        if json_start == -1 or json_end == 0:
-            raise ValueError("No JSON found in response")
-        
-        import json
-        json_str = response_text[json_start:json_end]
-        response_data = json.loads(json_str)
-        
         # Convert to structured models
-        filters_data = response_data.get('filters', {})
-        
+        filters_data = response_data.filters.__dict__
         # Convert numeric filters
         for field in ['fees', 'avg_package', 'ranking']:
             if field in filters_data and isinstance(filters_data[field], dict):
@@ -101,28 +100,49 @@ Analyze this query:"""
                 )
         
         # Ensure college_type is lowercase to match data
-        if 'college_type' in filters_data:
+        if 'college_type' in filters_data and filters_data['college_type']:
             filters_data['college_type'] = filters_data['college_type'].lower()
         
         # Normalize course names to match data format
-        if 'course' in filters_data:
+        if 'course' in filters_data and filters_data['course']:
             course = filters_data['course'].lower()
             if course in ['engineering', 'engineer']:
                 filters_data['course'] = 'Engineering'
             elif course == 'mba':
                 filters_data['course'] = 'MBA'
             elif course in ['medicine', 'medical']:
-                filters_data['course'] = 'Medicine'
+                filters_data['course'] = 'Medical'
             # Keep the original case for other courses
+        
+        # Normalize state names to proper format
+        if 'state' in filters_data and filters_data['state']:
+            state = filters_data['state'].title()
+            # Handle common variations
+            state_variations = {
+                'Maharastra': 'Maharashtra',
+                'Tamilnadu': 'Tamil Nadu',
+                'Tamil_Nadu': 'Tamil Nadu',
+                'Westbengal': 'West Bengal',
+                'West_Bengal': 'West Bengal',
+                'Uttaranchal': 'Uttarakhand',
+                'Andharapradesh': 'Andhra Pradesh',
+                'Andhrapradesh': 'Andhra Pradesh'
+            }
+            filters_data['state'] = state_variations.get(state, state)
+        
+        # Normalize region names
+        if 'region' in filters_data and filters_data['region']:
+            region = filters_data['region'].title()
+            filters_data['region'] = region
         
         filters = CollegeFilters(**filters_data)
         
         return QueryAnalysis(
             original_query=query,
             filters=filters,
-            cleaned_query=response_data.get('cleaned_query', query),
-            intent=response_data.get('intent', 'find_colleges'),
-            confidence=response_data.get('confidence', 0.7)
+            cleaned_query=response_data.cleaned_query or query,
+            intent=response_data.intent or 'find_colleges',
+            confidence=response_data.confidence or 0.7,
         )
         
     except Exception as e:
@@ -133,6 +153,7 @@ Analyze this query:"""
             filters=CollegeFilters(
                 city=None,
                 state=None,
+                region=None,
                 fees=None,
                 avg_package=None,
                 ranking=None,
@@ -338,8 +359,26 @@ class CollegeRAGSystem:
             # Extract structured filters using LLM
             print(f"🔍 Analyzing query: {query}")
             query_analysis = await extract_filters_with_llm(query)
+
+            print(f"🎯 Extracted Filters:")
+            print(f"   • City: {query_analysis.filters.city}")
+            print(f"   • State: {query_analysis.filters.state}")
+            print(f"   • Region: {query_analysis.filters.region}")
+            print(f"   • Course: {query_analysis.filters.course}")
+            print(f"   • College Type: {query_analysis.filters.college_type}")
+            if query_analysis.filters.fees:
+                print(f"   • Fees: {query_analysis.filters.fees.operator} ₹{query_analysis.filters.fees.value:,}")
+            if query_analysis.filters.avg_package:
+                print(f"   • Package: {query_analysis.filters.avg_package.operator} ₹{query_analysis.filters.avg_package.value:,}")
+            if query_analysis.filters.ranking:
+                print(f"   • Ranking: {query_analysis.filters.ranking.operator} {query_analysis.filters.ranking.value}")
             
             print(f"📊 Filter extraction confidence: {query_analysis.confidence:.1%}")
+            
+            # Show which cities will be searched based on location filters
+            filtered_cities = query_analysis.filters.get_filtered_cities()
+            if filtered_cities:
+                print(f"🌍 Will search in cities: {', '.join(filtered_cities)}")
             # Check if any filters were extracted
             filters_dict = query_analysis.filters.to_chromadb_filters()
             if filters_dict:
