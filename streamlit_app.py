@@ -155,9 +155,18 @@ def show_sidebar():
     st.sidebar.title("🚀 Navigation")
     
     # Navigation
+    pages = ["🏠 Home", "🔍 Search Colleges", "📊 Batch Analysis", "⚙️ System Status", "📚 Help & Examples"]
+    current_page = st.session_state.get('page', "🏠 Home")
+    
+    # Ensure current page is in the list
+    if current_page not in pages:
+        current_page = "🏠 Home"
+    
     page = st.sidebar.selectbox(
         "Choose a page:",
-        ["🏠 Home", "🔍 Search Colleges", "📊 Batch Analysis", "⚙️ System Status", "📚 Help & Examples"]
+        pages,
+        index=pages.index(current_page),
+        key="navigation_selectbox"
     )
     
     st.sidebar.markdown("---")
@@ -713,9 +722,8 @@ def main():
     # Show sidebar and get selected page
     selected_page = show_sidebar()
     
-    # Update page in session state
-    if selected_page != st.session_state.page:
-        st.session_state.page = selected_page
+    # Update page in session state (give priority to session state changes from widgets)
+    st.session_state.page = selected_page
     
     # Display the selected page
     if st.session_state.page == "🏠 Home":
