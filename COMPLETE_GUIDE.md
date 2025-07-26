@@ -340,10 +340,142 @@ streamlit run streamlit_app.py --logger.level=debug
 
 ## 🚀 Production Deployment
 
+### Streamlit Community Cloud (Free & Easy)
+
+**Best for**: Quick deployment, testing, small-scale usage
+
+1. **Prerequisites:**
+   - GitHub repository (public or private)
+   - OpenAI API key
+   - Streamlit Community Cloud account
+
+2. **Setup:**
+   ```bash
+   # Ensure requirements.txt exists
+   # Configure environment variables in Streamlit Cloud dashboard
+   OPENAI_RAG_MODEL_API_KEY=your_key_here
+   API_BASE_URL=your_api_endpoint (if using separate API deployment)
+   ```
+
+3. **Deploy:**
+   - Visit https://share.streamlit.io
+   - Connect your GitHub repository
+   - Choose the `streamlit_app.py` file
+   - Add environment variables
+   - Deploy!
+
+### Railway (Recommended for Full-Stack)
+
+**Best for**: Production deployment with both FastAPI and Streamlit
+
+1. **Setup Railway:**
+   ```bash
+   # Install Railway CLI
+   npm install -g @railway/cli
+   
+   # Login to Railway
+   railway login
+   
+   # Initialize project
+   railway init
+   ```
+
+2. **Deploy:**
+   ```bash
+   # Deploy both services
+   railway up
+   
+   # Set environment variables
+   railway variables set OPENAI_RAG_MODEL_API_KEY=your_key_here
+   railway variables set OPENAI_RAG_MODEL=gpt-4
+   railway variables set RAG_K=3
+   ```
+
+3. **Configuration:**
+   - Automatic SSL certificates
+   - Custom domains available
+   - Built-in monitoring and logs
+
+### Render (Free Tier Available)
+
+**Best for**: Separate frontend and backend deployment
+
+1. **Deploy API Service:**
+   - Connect GitHub repository
+   - Choose "Web Service"
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+2. **Deploy Frontend Service:**
+   - Create new web service
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT`
+
+3. **Environment Variables:**
+   ```
+   OPENAI_RAG_MODEL_API_KEY=your_key_here
+   API_BASE_URL=https://your-api-service.onrender.com
+   ```
+
+### Heroku Deployment
+
+**Best for**: Traditional cloud deployment
+
+1. **Install Heroku CLI:**
+   ```bash
+   # Install Heroku CLI
+   brew install heroku/brew/heroku  # macOS
+   
+   # Login
+   heroku login
+   ```
+
+2. **Deploy:**
+   ```bash
+   # Create Heroku app
+   heroku create your-app-name
+   
+   # Set environment variables
+   heroku config:set OPENAI_RAG_MODEL_API_KEY=your_key_here
+   heroku config:set API_BASE_URL=https://your-api-app.herokuapp.com
+   
+   # Deploy
+   git push heroku main
+   ```
+
+### Docker Deployment
+
+**Best for**: Custom infrastructure, cloud providers
+
+1. **Build and Run:**
+   ```bash
+   # Build image
+   docker build -t smart-campus-guide .
+   
+   # Run container
+   docker run -p 8501:8501 -p 8001:8001 \
+     -e OPENAI_RAG_MODEL_API_KEY=your_key_here \
+     smart-campus-guide
+   ```
+
+2. **Docker Compose (Optional):**
+   ```yaml
+   version: '3.8'
+   services:
+     app:
+       build: .
+       ports:
+         - "8501:8501"
+         - "8001:8001"
+       environment:
+         - OPENAI_RAG_MODEL_API_KEY=${OPENAI_RAG_MODEL_API_KEY}
+         - API_BASE_URL=http://localhost:8001
+   ```
+
 ### Environment Variables for Production
 ```bash
 # Production API settings
-OPENAI_RAG_MODEL=gpt-3.5-turbo  # Cost optimization
+OPENAI_RAG_MODEL=gpt-4  # Cost optimization
 RAG_K=3                         # Reduce for faster responses
 RAG_SCORE_THRESHOLD=0.3         # Higher threshold
 

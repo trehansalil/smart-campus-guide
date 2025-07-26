@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # FastAPI Backend
+  api:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENAI_RAG_MODEL_API_KEY=${OPENAI_RAG_MODEL_API_KEY}
+      - OPENAI_RAG_MODEL=gpt-4
+      - RAG_K=3
+      - RAG_SCORE_THRESHOLD=0.3
+      - CHROMA_HOST=localhost
+      - CHROMA_PORT=8000
+    command: python main.py
+    volumes:
+      - ./data:/app/data
+    networks:
+      - smart-campus-net
+
+  # Streamlit Frontend
+  frontend:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://api:8001
+    command: streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=8501
+    depends_on:
+      - api
+    networks:
+      - smart-campus-net
+
+  # ChromaDB (Optional)
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./chromadb_data:/chroma/chroma
+    networks:
+      - smart-campus-net
+
+networks:
+  smart-campus-net:
+    driver: bridge
+
+volumes:
+  chromadb_data:

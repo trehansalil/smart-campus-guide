@@ -44,7 +44,7 @@ Create a `.env` file in the project root:
 ```bash
 # Required: OpenAI Configuration
 OPENAI_RAG_MODEL_API_KEY=your_openai_api_key_here
-OPENAI_RAG_MODEL=gpt-4  # or gpt-3.5-turbo for cost efficiency
+OPENAI_RAG_MODEL=gpt-4  # or gpt-4 for cost efficiency
 
 # Optional: Advanced Configuration
 CHROMA_PERSIST_DIRECTORY=/path/to/chromadb/storage
@@ -383,7 +383,7 @@ RAG_SCORE_THRESHOLD=0.1
 RAG_CHUNK_SIZE=2000
 
 # Cost-optimized settings  
-OPENAI_RAG_MODEL=gpt-3.5-turbo
+OPENAI_RAG_MODEL=gpt-4
 RAG_K=3
 RAG_SCORE_THRESHOLD=0.3
 ```

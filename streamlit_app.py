@@ -18,7 +18,8 @@ st.set_page_config(
 )
 
 # Configuration
-API_BASE_URL = "http://localhost:8001"  # FastAPI server address
+import os
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8001")  # FastAPI server address
 TIMEOUT = 30  # Request timeout in seconds
 
 # CSS for custom styling
