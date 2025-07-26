@@ -3,8 +3,8 @@ services:
     name: smart-campus-guide
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT
     envVars:
       - key: OPENAI_RAG_MODEL_API_KEY
         sync: false
@@ -21,8 +21,8 @@ services:
     name: smart-campus-guide-api
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: OPENAI_RAG_MODEL_API_KEY
         sync: false

@@ -31,10 +31,10 @@ EXPOSE 8001 8501
 RUN echo '#!/bin/bash\n\
 echo "🚀 Starting Smart Campus Guide..."\n\
 echo "🔧 Starting FastAPI backend..."\n\
-python main.py &\n\
+uv run python main.py &\n\
 echo "🎨 Starting Streamlit frontend..."\n\
-streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=8501\n\
+uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=8501\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Start the application
-CMD ["/app/start.sh"]
+CMD ["uv", "run", "/app/start.sh"]

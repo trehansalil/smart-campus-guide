@@ -48,19 +48,19 @@ This directory contains the Streamlit-based web interface for the Smart Campus G
    # Using uv (recommended)
    uv install
 
-   # Or using pip
+   # Or install specific packages with pip (if needed)
    pip install streamlit plotly requests pandas
    ```
 
 2. **Ensure FastAPI backend is running:**
    ```bash
    # Start the FastAPI server first
-   python main.py
+   uv run python main.py
    ```
 
 3. **Start Streamlit app:**
    ```bash
-   streamlit run streamlit_app.py
+   uv run streamlit run streamlit_app.py
    ```
 
 4. **Access the application:**
@@ -197,13 +197,13 @@ def main():
    - Check if the API server is healthy: `curl http://localhost:8001/health`
 
 2. **Import errors:**
-   - Install missing dependencies: `pip install streamlit plotly requests`
+   - Install missing dependencies: `uv install` or `pip install streamlit plotly requests`
    - Ensure you're in the correct virtual environment
 
 3. **Page not loading:**
    - Clear browser cache
    - Check browser console for JavaScript errors
-   - Restart Streamlit: `Ctrl+C` then `streamlit run streamlit_app.py`
+   - Restart Streamlit: `Ctrl+C` then `uv run streamlit run streamlit_app.py`
 
 4. **Slow performance:**
    - Check API response times
@@ -215,7 +215,7 @@ def main():
 Enable debug mode for more detailed error information:
 
 ```bash
-streamlit run streamlit_app.py --logger.level=debug
+uv run streamlit run streamlit_app.py --logger.level=debug
 ```
 
 ### Checking Logs
@@ -270,7 +270,7 @@ def get_config():
 
 ### Local Development
 ```bash
-streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=8501
+uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=8501
 ```
 
 ### Docker Deployment
@@ -280,15 +280,15 @@ Create a `Dockerfile`:
 FROM python:3.10-slim
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN pip install uv && uv sync --frozen
 
 COPY streamlit_app.py .
 COPY .streamlit/ .streamlit/
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "streamlit_app.py", "--server.address=0.0.0.0"]
+CMD ["uv", "run", "streamlit", "run", "streamlit_app.py", "--server.address=0.0.0.0"]
 ```
 
 ### Cloud Deployment

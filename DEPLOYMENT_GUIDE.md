@@ -30,14 +30,19 @@ RAG_SCORE_THRESHOLD=0.3
 **Best for**: Quick deployment, testing, demos
 
 #### Steps:
-1. **Push to GitHub** (if not already done):
+1. **Generate requirements.txt from uv** (if deploying to Streamlit Cloud):
+   ```bash
+   uv export --format requirements-txt --output-file requirements.txt
+   ```
+
+2. **Push to GitHub** (if not already done):
    ```bash
    git add .
    git commit -m "Prepare for deployment"
    git push origin main
    ```
 
-2. **Deploy on Streamlit Cloud**:
+3. **Deploy on Streamlit Cloud**:
    - Visit: https://share.streamlit.io
    - Sign in with GitHub
    - Click "New app"
@@ -99,8 +104,8 @@ RAG_SCORE_THRESHOLD=0.3
    - Connect GitHub repository
    - Choose "Web Service"
    - Repository: `smart-campus-guide`
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - Build Command: `pip install uv && uv sync --frozen`
+   - Start Command: `uv run uvicorn main:app --host 0.0.0.0 --port $PORT`
 
 2. **Set Environment Variables**:
    ```
@@ -111,8 +116,8 @@ RAG_SCORE_THRESHOLD=0.3
 
 #### Deploy Frontend (Streamlit):
 1. **Create Another Web Service**:
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT`
+   - Build Command: `pip install uv && uv sync --frozen`
+   - Start Command: `uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT`
 
 2. **Set Environment Variables**:
    ```

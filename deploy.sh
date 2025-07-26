@@ -56,10 +56,16 @@ EOF
 deploy_streamlit() {
     print_info "Preparing for Streamlit Community Cloud deployment..."
     
-    # Check if requirements.txt exists
-    if [ ! -f requirements.txt ]; then
-        print_error "requirements.txt not found!"
+    # Check if pyproject.toml exists (uv project)
+    if [ ! -f pyproject.toml ]; then
+        print_error "pyproject.toml not found! This appears to be a uv project."
         exit 1
+    fi
+    
+    # Generate requirements.txt from uv if needed
+    if [ ! -f requirements.txt ]; then
+        print_info "Generating requirements.txt from uv dependencies..."
+        uv export --format requirements-txt --output-file requirements.txt
     fi
     
     print_success "Files ready for Streamlit Cloud deployment!"

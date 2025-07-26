@@ -13,7 +13,7 @@ services:
       - RAG_SCORE_THRESHOLD=0.3
       - CHROMA_HOST=localhost
       - CHROMA_PORT=8000
-    command: python main.py
+    command: uv run python main.py
     volumes:
       - ./data:/app/data
     networks:
@@ -26,7 +26,7 @@ services:
       - "8501:8501"
     environment:
       - API_BASE_URL=http://api:8001
-    command: streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=8501
+    command: uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=8501
     depends_on:
       - api
     networks:
