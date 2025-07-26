@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.rag.simplified_rag import SimplifiedCollegeRAGSystem
+from src.rag.rag_system import CollegeRAGSystem
 from src.constants import config
 # Import enhanced endpoints (optional)
 try:
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 logger.info(f"🔧 Smart Campus Guide API - Initializing... - {ENHANCED_ENDPOINTS_AVAILABLE}")
 
 # Global RAG system instance
-rag_system: Optional[SimplifiedCollegeRAGSystem] = None
+rag_system: Optional[CollegeRAGSystem] = None
 
 
 class RecommendationRequest(BaseModel):
@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
         
         # Initialize RAG system
         logger.info("🔧 Initializing RAG system...")
-        rag_system = SimplifiedCollegeRAGSystem()
+        rag_system = CollegeRAGSystem()
         await rag_system.initialize()
         logger.info("✅ RAG system initialized successfully")
         
