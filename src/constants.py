@@ -36,7 +36,7 @@ class Config:
         self.EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
         
         # OpenAI Configuration
-        self.OPENAI_RAG_MODEL: str = os.getenv("OPENAI_RAG_MODEL", "gpt-4")
+        self.OPENAI_RAG_MODEL: str = os.getenv("OPENAI_RAG_MODEL", "gpt-4o")
         self.OPENAI_RAG_MODEL_API_BASE: str = os.getenv(
             "OPENAI_RAG_MODEL_API_BASE", 
             "https://api.openai.com/v1"

@@ -18,7 +18,7 @@ This guide provides step-by-step instructions for deploying your Smart Campus Gu
 ```bash
 OPENAI_RAG_MODEL_API_KEY=your_openai_api_key_here
 API_BASE_URL=your_api_endpoint_url
-OPENAI_RAG_MODEL=gpt-4
+OPENAI_RAG_MODEL=gpt-4o
 RAG_K=3
 RAG_SCORE_THRESHOLD=0.3
 ```
@@ -82,7 +82,7 @@ RAG_SCORE_THRESHOLD=0.3
 3. **Set Environment Variables**:
    ```bash
    railway variables set OPENAI_RAG_MODEL_API_KEY=your_key_here
-   railway variables set OPENAI_RAG_MODEL=gpt-4
+   railway variables set OPENAI_RAG_MODEL=gpt-4o
    railway variables set RAG_K=3
    ```
 
@@ -96,7 +96,13 @@ RAG_SCORE_THRESHOLD=0.3
 
 ### Option 3: Render (FREE TIER AVAILABLE)
 
-**Best for**: Separate frontend/backend deployment
+**Best for**: Separate frontend/backend deployment, lightweight builds
+
+#### Quick Setup for Lighter Deployment:
+For faster builds and avoiding CUDA dependencies:
+```bash
+./deploy.sh render
+```
 
 #### Deploy Backend (API):
 1. **Create Web Service**:
@@ -104,25 +110,32 @@ RAG_SCORE_THRESHOLD=0.3
    - Connect GitHub repository
    - Choose "Web Service"
    - Repository: `smart-campus-guide`
-   - Build Command: `pip install uv && uv sync --frozen`
+   - Build Command: `pip install uv && uv sync --frozen --no-dev`
    - Start Command: `uv run uvicorn main:app --host 0.0.0.0 --port $PORT`
 
 2. **Set Environment Variables**:
    ```
    OPENAI_RAG_MODEL_API_KEY=your_key_here
-   OPENAI_RAG_MODEL=gpt-4
+   OPENAI_RAG_MODEL=gpt-3.5-turbo
    RAG_K=3
+   RAG_SCORE_THRESHOLD=0.3
    ```
 
 #### Deploy Frontend (Streamlit):
 1. **Create Another Web Service**:
-   - Build Command: `pip install uv && uv sync --frozen`
+   - Build Command: `pip install uv && uv sync --frozen --no-dev`
    - Start Command: `uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT`
 
 2. **Set Environment Variables**:
    ```
    API_BASE_URL=https://your-api-service.onrender.com
    ```
+
+#### Troubleshooting Render Port Issues:
+- **Port Detection**: Render automatically provides `$PORT` environment variable
+- **No Manual Port Setting**: Don't set PORT as an environment variable
+- **Binding Issue**: Ensure your app uses `--port $PORT` in start command
+- **Health Check**: Render scans for open ports automatically
 
 ### Option 4: Heroku
 
@@ -172,7 +185,7 @@ The app automatically detects the environment using the `API_BASE_URL` environme
 ### Optimize for Production
 ```bash
 # Reduce costs and improve performance
-OPENAI_RAG_MODEL=gpt-4  # Instead of gpt-4
+OPENAI_RAG_MODEL=gpt-4o  # Instead of gpt-4o
 RAG_K=3                         # Reduce number of results
 RAG_SCORE_THRESHOLD=0.3         # Higher threshold for relevance
 ```
@@ -225,7 +238,7 @@ heroku logs --tail
 2. **Google Cloud Platform** or **AWS** for enterprise
 
 ### For Cost Optimization:
-1. Use `gpt-4` instead of `gpt-4`
+1. Use `gpt-4o` instead of `gpt-4o`
 2. Implement query caching
 3. Set reasonable rate limits
 4. Monitor usage regularly

@@ -259,12 +259,16 @@ def main():
         logger.error("Please check the .env.example file for required settings.")
         return
     
+    # Get port from environment variable (for deployment) or use default
+    import os
+    port = int(os.getenv("PORT", 8001))
+    
     # Run the FastAPI application
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8001,  # Changed to avoid conflict with kubectl
-        reload=True,  # Enable auto-reload for development
+        port=port,
+        reload=False,  # Disable reload for production
         log_level="info"
     )
 

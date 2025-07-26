@@ -59,7 +59,7 @@ vim .env  # or nano .env
 OPENAI_RAG_MODEL_API_KEY=your_openai_api_key_here
 
 # Optional Configuration
-OPENAI_RAG_MODEL=gpt-4
+OPENAI_RAG_MODEL=gpt-4o
 CHROMA_PERSIST_DIRECTORY=/path/to/chromadb/storage
 RAG_K=5
 RAG_SCORE_THRESHOLD=0.2
@@ -387,7 +387,7 @@ streamlit run streamlit_app.py --logger.level=debug
    
    # Set environment variables
    railway variables set OPENAI_RAG_MODEL_API_KEY=your_key_here
-   railway variables set OPENAI_RAG_MODEL=gpt-4
+   railway variables set OPENAI_RAG_MODEL=gpt-4o
    railway variables set RAG_K=3
    ```
 
@@ -475,7 +475,7 @@ streamlit run streamlit_app.py --logger.level=debug
 ### Environment Variables for Production
 ```bash
 # Production API settings
-OPENAI_RAG_MODEL=gpt-4  # Cost optimization
+OPENAI_RAG_MODEL=gpt-4o  # Cost optimization
 RAG_K=3                         # Reduce for faster responses
 RAG_SCORE_THRESHOLD=0.3         # Higher threshold
 

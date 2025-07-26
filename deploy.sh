@@ -41,7 +41,7 @@ check_env() {
 OPENAI_RAG_MODEL_API_KEY=your_openai_api_key_here
 
 # Optional Configuration
-OPENAI_RAG_MODEL=gpt-4
+OPENAI_RAG_MODEL=gpt-4o
 RAG_K=3
 RAG_SCORE_THRESHOLD=0.3
 API_BASE_URL=http://localhost:8001
@@ -75,6 +75,30 @@ deploy_streamlit() {
     echo "3. Connect your GitHub repository"
     echo "4. Select streamlit_app.py as the main file"
     echo "5. Add your environment variables in the secrets section"
+}
+
+# Deploy to Render
+deploy_render() {
+    print_info "Preparing for Render deployment..."
+    
+    # Create lightweight version for faster deployment
+    if [ -f pyproject-lite.toml ]; then
+        print_info "Using lightweight dependencies for Render..."
+        cp pyproject-lite.toml pyproject.toml.backup
+        print_warning "Backup created: pyproject.toml.backup"
+    fi
+    
+    print_success "Files ready for Render deployment!"
+    print_info "Next steps:"
+    echo "1. Push code to GitHub: git add . && git commit -m 'Deploy to Render' && git push"
+    echo "2. Go to https://render.com and connect your GitHub repository"
+    echo "3. Create two services:"
+    echo "   - API Service: Build: 'pip install uv && uv sync --frozen --no-dev'"
+    echo "                 Start: 'uv run uvicorn main:app --host 0.0.0.0 --port \$PORT'"
+    echo "   - Frontend: Build: 'pip install uv && uv sync --frozen --no-dev'" 
+    echo "              Start: 'uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port \$PORT'"
+    echo "4. Set environment variables as specified in DEPLOYMENT_GUIDE.md"
+    print_warning "Note: Using lightweight dependencies to reduce build time and avoid CUDA packages"
 }
 
 # Deploy to Railway
@@ -179,6 +203,9 @@ case "$1" in
     "streamlit"|"cloud")
         deploy_streamlit
         ;;
+    "render")
+        deploy_render
+        ;;
     "railway")
         deploy_railway
         ;;
@@ -196,12 +223,13 @@ case "$1" in
         echo ""
         echo "Available platforms:"
         echo "  streamlit  - Streamlit Community Cloud (free)"
+        echo "  render     - Render (free tier with lightweight deps)"
         echo "  railway    - Railway (recommended for full-stack)"
         echo "  heroku     - Heroku"
         echo "  docker     - Local Docker container"
         echo "  compose    - Docker Compose (full stack)"
         echo ""
-        echo "Example: $0 railway"
+        echo "Example: $0 render"
         ;;
     *)
         print_error "Unknown platform: $1"

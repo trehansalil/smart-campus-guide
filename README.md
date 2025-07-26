@@ -44,7 +44,7 @@ Create a `.env` file in the project root:
 ```bash
 # Required: OpenAI Configuration
 OPENAI_RAG_MODEL_API_KEY=your_openai_api_key_here
-OPENAI_RAG_MODEL=gpt-4  # or gpt-4 for cost efficiency
+OPENAI_RAG_MODEL=gpt-4o  # or gpt-4o for cost efficiency
 
 # Optional: Advanced Configuration
 CHROMA_PERSIST_DIRECTORY=/path/to/chromadb/storage
@@ -367,7 +367,7 @@ For detailed deployment instructions, see [`deployment/README.md`](deployment/RE
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_RAG_MODEL_API_KEY` | *(required)* | OpenAI API key for LLM queries |
-| `OPENAI_RAG_MODEL` | `gpt-4` | OpenAI model for query analysis |
+| `OPENAI_RAG_MODEL` | `gpt-4o` | OpenAI model for query analysis |
 | `CHROMA_PERSIST_DIRECTORY` | `~/.chromadb_autogen` | Local ChromaDB storage path |
 | `CHROMA_COLLECTION_NAME` | `colleges_rag` | ChromaDB collection name |
 | `RAG_K` | `3` | Number of results to retrieve |
@@ -383,7 +383,7 @@ RAG_SCORE_THRESHOLD=0.1
 RAG_CHUNK_SIZE=2000
 
 # Cost-optimized settings  
-OPENAI_RAG_MODEL=gpt-4
+OPENAI_RAG_MODEL=gpt-4o
 RAG_K=3
 RAG_SCORE_THRESHOLD=0.3
 ```

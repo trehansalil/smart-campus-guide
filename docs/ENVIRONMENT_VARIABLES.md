@@ -14,7 +14,7 @@ Template file showing all available environment variables with example values.
 
 ### OpenAI Configuration (Required)
 - `OPENAI_RAG_MODEL_API_KEY`: Your OpenAI API key (required)
-- `OPENAI_RAG_MODEL`: OpenAI model to use (default: "gpt-4")
+- `OPENAI_RAG_MODEL`: OpenAI model to use (default: "gpt-4o")
 - `OPENAI_RAG_MODEL_API_BASE`: OpenAI API base URL (default: "https://api.openai.com/v1")
 - `OPENAI_MAX_RETRIES`: Maximum retries for API calls (default: 3)
 

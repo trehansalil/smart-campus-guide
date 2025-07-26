@@ -8,7 +8,7 @@ services:
       - "8001:8001"
     environment:
       - OPENAI_RAG_MODEL_API_KEY=${OPENAI_RAG_MODEL_API_KEY}
-      - OPENAI_RAG_MODEL=gpt-4
+      - OPENAI_RAG_MODEL=gpt-4o
       - RAG_K=3
       - RAG_SCORE_THRESHOLD=0.3
       - CHROMA_HOST=localhost

@@ -104,7 +104,7 @@ curl http://localhost:8000/api/v1/heartbeat
 
 ```python
 # Before (hardcoded values)
-openai_model = os.getenv("OPENAI_RAG_MODEL", "gpt-4")
+openai_model = os.getenv("OPENAI_RAG_MODEL", "gpt-4o")
 persist_path = os.getenv("CHROMA_PERSIST_DIRECTORY", os.path.join(str(Path.home()), ".chromadb_autogen"))
 
 # After (centralized configuration)

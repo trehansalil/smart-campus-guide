@@ -1,34 +1,28 @@
 services:
   - type: web
-    name: smart-campus-guide
+    name: smart-campus-guide-api
     runtime: python
     plan: free
-    buildCommand: pip install uv && uv sync --frozen
-    startCommand: uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: OPENAI_RAG_MODEL_API_KEY
         sync: false
-      - key: API_BASE_URL
-        value: https://smart-campus-guide-api.onrender.com
       - key: OPENAI_RAG_MODEL
-        value: gpt-4
+        value: gpt-3.5-turbo
       - key: RAG_K
         value: 3
       - key: RAG_SCORE_THRESHOLD
         value: 0.3
     
   - type: web
-    name: smart-campus-guide-api
+    name: smart-campus-guide
     runtime: python
     plan: free
-    buildCommand: pip install uv && uv sync --frozen
-    startCommand: uv run uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT
     envVars:
+      - key: API_BASE_URL
+        value: https://smart-campus-guide-api.onrender.com
       - key: OPENAI_RAG_MODEL_API_KEY
         sync: false
-      - key: OPENAI_RAG_MODEL
-        value: gpt-4
-      - key: RAG_K
-        value: 3
-      - key: RAG_SCORE_THRESHOLD
-        value: 0.3
