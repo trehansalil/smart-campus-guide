@@ -734,7 +734,7 @@ def main():
     st.markdown("""
     <div style="text-align: center; color: #666; padding: 1rem;">
         <p>🎓 Smart Campus Guide - Powered by AI & RAG Technology</p>
-        <p>Built with Streamlit & FastAPI | © 2024</p>
+        <p>Built with Streamlit & FastAPI | © 2025</p>
     </div>
     """, unsafe_allow_html=True)
 
