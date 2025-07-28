@@ -21,7 +21,7 @@ class Config:
         # ChromaDB Configuration
         self.CHROMA_PERSIST_DIRECTORY: str = os.getenv(
             "CHROMA_PERSIST_DIRECTORY", 
-            os.path.join(str(Path.home()), ".chromadb_autogen")
+            os.path.join(os.getcwd(), ".chromadb_autogen")
         )
         self.CHROMA_COLLECTION_NAME: str = os.getenv("CHROMA_COLLECTION_NAME", "colleges_rag")
         self.CHROMA_HOST: str = os.getenv("CHROMA_HOST", "localhost")
