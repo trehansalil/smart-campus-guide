@@ -21,7 +21,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.constants import config
-from .filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator
+from src.rag.filter_models import CollegeFilters, QueryAnalysis, NumericFilter, ComparisonOperator
 
 # Simple LLM-based filter extraction (without complex autogen agent setup)
 async def extract_filters_with_llm(query: str) -> QueryAnalysis:
